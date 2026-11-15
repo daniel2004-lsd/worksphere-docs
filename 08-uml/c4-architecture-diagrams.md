@@ -1,88 +1,88 @@
-# 08 — Diagramas de Arquitectura C4 (Nivel 1 y Nivel 2)
+# 08 — C4 Architecture Diagrams (Level 1 & Level 2)
 
-> **Documento:** C4 Model System Architecture  
-> **Estado:** 🟢 Estable (Fase 0)  
-> **Líder Técnico & Arquitecto:** Daniel (`daniel2004-lsd`)  
-> **Proyecto:** WorkSphere — Enterprise Operations Intelligence Platform
+> **Document:** C4 Model System Architecture  
+> **Status:** 🟢 Baseline  
+> **Technical Lead & Architect:** Daniel (`daniel2004-lsd`)  
+> **Project:** WorkSphere — Enterprise Operations Intelligence Platform
 
 ---
 
-## 1. Diagrama C4 Nivel 1: Contexto del Sistema (System Context)
+## 1. C4 Level 1: System Context Diagram
 
-El Diagrama de Contexto muestra a **WorkSphere** en el centro, los diferentes usuarios empresariales que interactúan con él y los sistemas externos con los que se integra o relaciona.
+The System Context diagram illustrates **WorkSphere** at the center, its enterprise user personas, and external supporting systems.
 
 ```mermaid
 flowchart TD
-    subgraph Actores["Usuarios del Sistema"]
-        Admin["Administrador Corporativo<br/>(Configuración y gobernanza)"]
-        PM["Project / Delivery Manager<br/>(Seguimiento y desbloqueos)"]
-        Approver["Director / Aprobador<br/>(Autorización formal)"]
-        Engineer["Ingeniero / Colaborador<br/>(Ejecución de tareas)"]
+    subgraph Users["System Users"]
+        Admin["Corporate Administrator<br/>(Organization setup & access governance)"]
+        PM["Delivery / Project Manager<br/>(Milestone tracking & bottleneck monitoring)"]
+        Approver["Executive Approver<br/>(Formal sign-offs & budget authorizations)"]
+        Engineer["Software Engineer / Member<br/>(Task execution & approval requests)"]
     end
 
-    subgraph WorkSphereSystem["Plataforma WorkSphere (Enterprise Operations Intelligence)"]
-        WS["WorkSphere Core Platform<br/>- Aislamiento Multi-Tenant (RLS)<br/>- Proyectos y Tareas críticas<br/>- Flujos de Aprobación inmutables<br/>- IA Explicable sobre hechos autorizados"]
+    subgraph WorkSphereSystem["WorkSphere Platform (Enterprise Operations Intelligence)"]
+        WS["WorkSphere Core System<br/>- Multi-tenant PostgreSQL RLS isolation<br/>- Project delivery and task tracking<br/>- Immutable approval audit logs<br/>- Local explainable AI insights"]
     end
 
-    subgraph ExternalSystems["Ecosistema Externo"]
-        GitPlatforms["Plataformas de Código<br/>(GitHub / GitLab / Bitbucket)"]
-        SMTP["Servidor de Correo / Notificaciones<br/>(SMTP / Alert Gateway)"]
-        LLM["Motor de Inferencia Local<br/>(Ollama / vLLM / RAG)"]
+    subgraph ExternalSystems["External Ecosystem"]
+        GitPlatforms["Code Repositories<br/>(GitHub / GitLab / Bitbucket)"]
+        SMTP["Outbound Notifications<br/>(SMTP Gateway / Alerts)"]
+        LLM["Local Inference Engine<br/>(Ollama / vLLM / Local RAG)"]
     end
 
-    Admin -->|"Registra organización y miembros"| WS
-    PM -->|"Crea proyectos y detecta bloqueos"| WS
-    Approver -->|"Resuelve solicitudes con justificación"| WS
-    Engineer -->|"Actualiza tareas y solicita aprobaciones"| WS
+    Admin -->|"Manages organizations and memberships"| WS
+    PM -->|"Tracks projects and unblocks delivery"| WS
+    Approver -->|"Resolves approval requests with comments"| WS
+    Engineer -->|"Updates tasks and requests approvals"| WS
 
-    GitPlatforms -.->|"Webhooks de commits / PRs"| WS
-    WS -.->|"Envía alertas y recordatorios"| SMTP
-    WS <-->|"Consultas RAG auditadas"| LLM
+    GitPlatforms -.->|"Webhook events (commits, PRs)"| WS
+    WS -.->|"Dispatches email alerts"| SMTP
+    WS <-->|"Permission-aware RAG queries"| LLM
 ```
 
 ---
 
-## 2. Diagrama C4 Nivel 2: Contenedores (Container Diagram)
+## 2. C4 Level 2: Container Diagram
 
-El Diagrama de Contenedores descompone **WorkSphere** en sus aplicaciones web, pasarela de entrada (Gateway), microservicios independientes, bases de datos aisladas y el broker de mensajería asíncrono.
+The Container diagram decomposes **WorkSphere** into client applications, security ingress, distributed microservices, independent databases, and asynchronous message brokers.
 
 ```mermaid
 flowchart TD
-    subgraph Clientes["Capa de Presentación"]
-        SPA["Web Application<br/>(React 18 + Vite + TypeScript)<br/>UI Empresarial & Tableros"]
+    subgraph Presentation["Presentation Layer"]
+        SPA["Web Application<br/>(React 18 + Vite + TypeScript)<br/>Enterprise UI & Operational Dashboards"]
     end
 
-    subgraph Ingress["Capa de Enrutamiento & Seguridad"]
+    subgraph Ingress["Ingress & Security Layer"]
         Gateway["API Gateway<br/>(Kong Gateway OSS)<br/>Routing, TLS, Rate Limiting"]
-        IAM["Identity & Access Management<br/>(Keycloak 24)<br/>OIDC, OAuth2, JWT con tenant_id"]
+        IAM["Identity & Access Management<br/>(Keycloak 24)<br/>OIDC, OAuth2, Tenant-enriched JWTs"]
     end
 
-    subgraph Microservicios["Capa de Microservicios Distribuidos (Database per Service)"]
-        TenantSvc["Tenant Service<br/>(Java 21 / Spring Boot 3)<br/>Organizaciones, membresías & Outbox"]
-        WorkspaceSvc["Workspace Service<br/>(C# / .NET 9)<br/>Proyectos, tareas & bloqueos"]
-        WorkflowSvc["Workflow Service<br/>(Java 21 / Spring Boot 3)<br/>Máquinas de estado de aprobaciones"]
-        AnalyticsSvc["Analytics & AI Service<br/>(Python 3.12 / FastAPI)<br/>Métricas & Agente RAG local"]
+    subgraph Microservices["Distributed Microservices Layer (Database-per-Service)"]
+        TenantSvc["Tenant Service<br/>(Java 21 / Spring Boot 3)<br/>Organizations & Outbox Relay"]
+        WorkspaceSvc["Workspace Service<br/>(C# / ASP.NET Core .NET 9)<br/>Projects, Tasks & Blockers"]
+        WorkflowSvc["Workflow Service<br/>(Java 21 / Spring Boot 3)<br/>Approval State Machine & Audit"]
+        AnalyticsSvc["Analytics & AI Service<br/>(Python 3.12 / FastAPI)<br/>Telemetry & Local RAG Agent"]
     end
 
-    subgraph EventBroker["Mensajería Asíncrona Confiable"]
-        Broker["RabbitMQ 3.13<br/>Exchange: worksphere.events (Topic)<br/>DLX: worksphere.dlx"]
+    subgraph Broker["Asynchronous Message Broker"]
+        RabbitMQ["RabbitMQ 3.13<br/>Topic Exchange: worksphere.events<br/>DLX: worksphere.dlx"]
     end
 
-    subgraph Persistencia["Capa de Datos Aislada (PostgreSQL 16 + RLS)"]
+    subgraph Persistence["Isolated Data Layer (PostgreSQL 16 + Liquibase + RLS)"]
         DB_IAM[("iam_db<br/>(Keycloak)")]
-        DB_TENANT[("tenant_db<br/>(Liquibase + RLS)")]
-        DB_WORKSPACE[("workspace_db<br/>(Liquibase + RLS)")]
-        DB_WORKFLOW[("workflow_db<br/>(Liquibase + RLS)")]
-        DB_ANALYTICS[("ClickHouse OLAP<br/>(Telemetría de eventos)")]
+        DB_TENANT[("tenant_db<br/>(Liquibase YAML + RLS)")]
+        DB_WORKSPACE[("workspace_db<br/>(Liquibase YAML + RLS)")]
+        DB_WORKFLOW[("workflow_db<br/>(Liquibase YAML + RLS)")]
+        DB_ANALYTICS[("ClickHouse OLAP<br/>(Telemetry Events)")]
     end
 
     SPA -->|"HTTPS / REST"| Gateway
     SPA -->|"OIDC Login"| IAM
 
-    Gateway -->|"Valida JWT y rutea"| TenantSvc
-    Gateway -->|"Valida JWT y rutea"| WorkspaceSvc
-    Gateway -->|"Valida JWT y rutea"| WorkflowSvc
-    Gateway -->|"Valida JWT y rutea"| AnalyticsSvc
+    Gateway -->|"Validates JWT & Routes"| TenantSvc
+    Gateway -->|"Validates JWT & Routes"| WorkspaceSvc
+    Gateway -->|"Validates JWT & Routes"| WorkflowSvc
+    Gateway -->|"Validates JWT & Routes"| AnalyticsSvc
 
     IAM --> DB_IAM
     TenantSvc --> DB_TENANT
@@ -90,18 +90,18 @@ flowchart TD
     WorkflowSvc --> DB_WORKFLOW
     AnalyticsSvc --> DB_ANALYTICS
 
-    TenantSvc -.->|"Outbox Relay: organization.created"| Broker
-    WorkspaceSvc -.->|"Outbox Relay: task.blocked"| Broker
-    WorkflowSvc -.->|"Outbox Relay: approval.resolved"| Broker
+    TenantSvc -.->|"Outbox: organization.created"| RabbitMQ
+    WorkspaceSvc -.->|"Outbox: task.blocked"| RabbitMQ
+    WorkflowSvc -.->|"Outbox: approval.resolved"| RabbitMQ
 
-    Broker -.->|"Consume approval.resolved"| WorkspaceSvc
-    Broker -.->|"Stream de eventos"| AnalyticsSvc
+    RabbitMQ -.->|"Consumes approval.resolved"| WorkspaceSvc
+    RabbitMQ -.->|"Event Stream Telemetry"| AnalyticsSvc
 ```
 
 ---
 
-## 3. Justificación de los Límites de Red y Aislamiento
+## 3. Network Boundaries & Operational Security Rules
 
-1. **Punto Único de Ingress:** Todo el tráfico externo entra exclusivamente por el **Kong Gateway** (puerto `8000/8005`). Ningún microservicio ni base de datos expone sus puertos directamente hacia clientes de internet.
-2. **Database-per-Service Estricto:** Cada microservicio se conecta única y exclusivamente a su propia base de datos mediante credenciales aisladas. No existen *cross-database foreign keys*.
-3. **Desacoplamiento Asíncrono de Desbloqueo:** Cuando el `Workflow Service` resuelve una aprobación, no invoca sincrónicamente al `Workspace Service` mediante HTTP (lo cual crearía acoplamiento temporal y riesgo de cascada de fallos). En su lugar, confirma la decisión en su base de datos, escribe en su tabla outbox y emite el evento `approval.resolved` a RabbitMQ; el `Workspace Service` consume el evento y desbloquea la tarea de forma idempotente.
+1. **Single Public Ingress:** All external client traffic terminates at **Kong API Gateway**. Microservices, databases, and message brokers are isolated within private Docker bridge / Kubernetes networks.
+2. **Database Isolation:** Microservices communicate exclusively over documented contracts; direct cross-database queries are strictly blocked.
+3. **Asynchronous Task Unblocking:** `Workflow Service` never calls `Workspace Service` over synchronous HTTP upon approval completion. State changes are communicated via RabbitMQ events backed by the Transactional Outbox pattern.

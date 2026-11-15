@@ -1,63 +1,63 @@
-# 01 — Planteamiento del Problema (Problem Framing)
+# 01 — Context & Problem Framing
 
-> **Documento:** Problem Statement & Justification  
-> **Estado:** Fase 0 — Definición de Negocio  
-> **Líder Técnico & Arquitecto:** Daniel (`daniel2004-lsd`)  
-> **Proyecto:** WorkSphere — Enterprise Operations Intelligence Platform
-
----
-
-## 1. El Contexto Operativo Actual
-
-En las organizaciones intensivas en conocimiento y servicios profesionales (fábricas de software, consultoras tecnológicas y agencias de ingeniería), la operación diaria descansa sobre herramientas altamente especializadas pero totalmente aisladas:
-
-- **Seguimiento de tareas técnicas:** Jira, Linear, Trello, GitHub Issues.
-- **Comunicación y coordinación inmediata:** Slack, Microsoft Teams, correo electrónico, reuniones virtuales.
-- **Gestión de personas y estructura:** Sistemas de RRHH, hojas de cálculo, organigramas estáticos.
-- **Repositorios y código:** GitHub, GitLab, Bitbucket.
-
-Cada una de estas herramientas cumple su función puntual de forma adecuada; sin embargo, **ninguna de ellas comprende la operación de la empresa como un sistema integral**.
+> **Document:** Problem Statement & Business Justification  
+> **Status:** Phase 0 — Business Definition  
+> **Technical Lead & Architect:** Daniel (`daniel2004-lsd`)  
+> **Project:** WorkSphere — Enterprise Operations Intelligence Platform
 
 ---
 
-## 2. El Dolor Central: Ceguera de Contexto (Context Blindness)
+## 1. The Modern Operational Context
 
-El problema de raíz no es la falta de herramientas, sino la **fragmentación y pérdida de causalidad operativa**.
+In modern knowledge-intensive organizations (software factories, technology consultancies, and professional services firms), daily operations rely heavily on specialized yet disconnected tools:
+
+- **Technical Task Tracking:** Jira, Linear, Trello, GitHub Issues.
+- **Immediate Team Communication:** Slack, Microsoft Teams, email, virtual calls.
+- **People & Organizational Structure:** HR systems, spreadsheets, static organizational charts.
+- **Source Code Repositories:** GitHub, GitLab, Bitbucket.
+
+While each tool fulfills its isolated purpose effectively, **none possesses an integrated view of the company's end-to-end operational reality**.
+
+---
+
+## 2. The Core Problem: Operational Context Blindness
+
+The root issue is not a shortage of tools, but **fragmentation and loss of causal traceability**:
 
 ```
-[Gestores de Tareas]          [Canales de Chat / Email]         [Estructura Organizacional]
-         │                                │                                  │
-  "Ticket en progreso"            "Aprobación informal"            "Roles y asignaciones"
-         │                                │                                  │
-         └────────────────────────────────┼──────────────────────────────────┘
+[Task Trackers]               [Chat Channels / Email]            [Organizational Structure]
+       │                                  │                                    │
+ "Ticket in progress"           "Informal approval"                  "Roles and assignments"
+       │                                  │                                    │
+       └──────────────────────────────────┼────────────────────────────────────┘
                                           ▼
-                         FRAGMENTACIÓN Y PÉRDIDA DE CAUSALIDAD
-         - No se sabe si una tarea está detenida por código o por una aprobación.
-         - Se desconoce la sobrecarga real de las personas que aprueban.
-         - Las decisiones se toman tarde cuando el proyecto ya está retrasado.
+                       FRAGMENTATION & CONTEXT BLINDNESS
+         - Tasks stall without clear visibility of whether the blocker is code or approval.
+         - The real workload of designated approvers remains invisible.
+         - Executive decisions are made reactively after milestones are already missed.
 ```
 
-### Síntomas Específicos Identificados:
+### Key Symptoms:
 
-1. **Bloqueos Invisibles por Aprobaciones Informales:**  
-   Gran parte de los retrasos en proyectos de software no se deben a dificultades técnicas de programación, sino a **aprobaciones administrativas o de negocio estancadas**: autorizaciones de presupuesto, validaciones de arquitectura, accesos a entornos de clientes o visto bueno de cambios de alcance. Al gestionarse por chat o correo, no existe trazabilidad, SLA ni visibilidad de quién tiene el balón detenido.
+1. **Invisible Blockers from Informal Approvals:**  
+   Most engineering project delays do not stem from coding complexity, but from **stalled business or administrative approvals**: budget sign-offs, architecture validations, client environment access, or scope change authorizations. Handled via chat or email, these lack SLAs, audit logs, and status visibility.
 
-2. **Desbalance de Carga y Sobreasignación No Detectada:**  
-   Un líder técnico o gerente puede tener asignadas tareas en un gestor tradicional que aparentan 20 horas de trabajo semanal. No obstante, esa misma persona recibe decenas de solicitudes de revisión y aprobación en paralelo. Las herramientas actuales no correlacionan la carga de procesos con la carga de tareas de desarrollo, generando cuellos de botella y *burnout*.
+2. **Unmeasured Workload Imbalance & Burnout:**  
+   A tech lead or manager may show a normal ticket load in a task manager while simultaneously drowning in unmeasured approval requests and administrative decisions, causing hidden bottlenecks and burnout.
 
-3. **Ceguera Ejecutiva en Tiempo Real:**  
-   Para que la dirección de operaciones (COO / VP) conozca la salud real de los proyectos, debe convocar reuniones síncronas de estatus (*status meetings*) o exigir reportes manuales a los directores de proyecto, los cuales reflejan información desfasada o filtrada subjetivamente.
+3. **Absence of Real-Time Executive Visibility:**  
+   Chief Operating Officers (COOs) and Delivery Directors must rely on status meetings and subjective status reports that are already outdated by the time they are presented.
 
-4. **Pérdida de Soberanía y Dependencia de Proveedores (*Vendor Lock-in*):**  
-   Las soluciones de gestión empresarial tradicionales imponen infraestructuras de nube cerrada, licencias privativas por usuario con costos crecientes y almacenamiento de datos sensibles (propiedad intelectual, clientes, nóminas) fuera del control y la red de la organización.
+4. **Loss of Data Sovereignty & Vendor Lock-in:**  
+   Traditional enterprise SaaS solutions enforce closed clouds, escalating per-seat costs, and data storage outside the organization's control.
 
 ---
 
-## 3. La Justificación de WorkSphere: Capa de Inteligencia e Integración
+## 3. WorkSphere's Value Proposition: Intelligence & Integration Layer
 
-WorkSphere **no busca reemplazar de forma destructiva las herramientas existentes**. Su propósito es constituirse como la **Capa de Inteligencia Operativa y Gobernanza (System of Intelligence)** que:
+WorkSphere **does not aim to forcefully replace existing engineering tools** (like GitHub or GitLab). Instead, it positions itself as the **System of Intelligence and Governance**:
 
-1. **Formaliza y relaciona los Procesos de Aprobación** directamente vinculados a proyectos y tareas.
-2. **Integra la Estructura Organizacional** para saber quién tiene autoridad para aprobar, qué equipo está impactado y cómo se distribuye la capacidad operativa.
-3. **Ofrece Soberanía Total:** Arquitectura *Open Source First* y *Self-Hosted First*, ejecutable en infraestructura propia sin fugas de datos hacia terceros.
-4. **Inteligencia Artificial Local y Verificable:** Asistencia basada exclusivamente en hechos auditables y autorizados mediante permisos de usuario (Role-Based Access Control + Row-Level Security), eliminando alucinaciones y garantizando la privacidad corporativa.
+1. **Formalizes Approval Workflows:** Directly connects approvals to blocked projects and tasks.
+2. **Integrates Organizational Authority:** Maps who has the mandate to approve and provides visibility into team capacity.
+3. **Guarantees Complete Sovereignty:** *Open Source First* and *Self-Hosted First* architecture running entirely on self-managed infrastructure.
+4. **Delivers Auditable, Private AI Assistance:** Local models (Ollama/RAG) executing within strict user permission boundaries (RBAC + Row-Level Security), ensuring zero external data leakage.

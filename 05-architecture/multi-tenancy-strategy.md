@@ -1,71 +1,79 @@
-# Estrategia de Multi-Tenancy y Aislamiento de Datos
+# 05 — Multi-Tenancy Strategy & Data Isolation
 
-> **Documento:** ADR / Arquitectura de Aislamiento  
-> **Patrón Adoptado:** Logical Separation with Database-per-Service + Row-Level Security (RLS)
-
----
-
-## 🎯 Desafío del Multi-Tenancy en SaaS B2B
-
-En **WorkSphere**, múltiples organizaciones (inquilinos) comparten la misma infraestructura de cómputo y clústeres de base de datos. Bajo ninguna circunstancia los datos de una empresa (`tenant-A`) pueden ser visibles ni modificados por usuarios de otra empresa (`tenant-B`).
+> **Document:** Architecture Decision & Isolation Design  
+> **Pattern:** Logical Isolation with Database-per-Service + PostgreSQL Row-Level Security (RLS)  
+> **Status:** 🟢 Baseline  
+> **Technical Lead & Architect:** Daniel (`daniel2004-lsd`)  
+> **Project:** WorkSphere — Enterprise Operations Intelligence Platform
 
 ---
 
-## 🛡️ Niveles de Aislamiento en Capas (Defensa en Profundidad)
+## 🎯 The Multi-Tenancy Challenge in Enterprise B2B SaaS
+
+In WorkSphere, multiple customer organizations (tenants) share common compute and database cluster infrastructure (*Shared Database, Shared Schema per microservice*).
+
+Under zero circumstances may data belonging to Company A (`tenant-A`) be viewed, queried, or modified by users belonging to Company B (`tenant-B`).
+
+---
+
+## 🛡️ Defense-in-Depth Layered Isolation
+
+WorkSphere enforces tenant isolation across four independent architectural boundaries:
 
 ```mermaid
 flowchart TD
-    Req["Petición HTTP entrante"] --> GW["1. API Gateway (Kong) / Auth Validator"]
-    GW --> JWT["Extrae 'tenant_id' y 'org_id' del JWT verificado"]
-    JWT --> SVC["2. Contexto de Seguridad del Microservicio (Middleware)"]
-    SVC --> APP["3. Lógica de Aplicación (Domain Filter Obligatorio)"]
-    APP --> DB["4. PostgreSQL Row-Level Security (RLS)"]
-    DB --> Data[(Datos Aislados del Tenant)]
+    Req["Incoming HTTP Request"] --> GW["1. API Gateway (Kong) / OIDC Token Verification"]
+    GW --> JWT["Cryptographic validation of 'tenant_id' and roles"]
+    JWT --> SVC["2. Microservice Security Middleware Context"]
+    SVC --> APP["3. Application Domain Filter (WHERE tenant_id = :current_tenant_id)"]
+    APP --> DB["4. PostgreSQL Row-Level Security (RLS) Engine"]
+    DB --> Data[(Physical Tenant-Isolated Rows)]
 ```
 
-### Capa 1: Contexto Criptográfico en JWT (Keycloak)
-El token JWT emitido por Keycloak al autenticarse un usuario contiene los claims:
+### Layer 1: Cryptographic JWT Context (Keycloak OIDC)
+Tokens issued upon user authentication contain immutable claims:
 ```json
 {
   "sub": "usr_99812",
   "email": "carlos@techsolutions.com",
-  "tenant_id": "ten_techsolutions_01",
+  "tenant_id": "ten_techsolutions_15d1e947",
+  "organization_slug": "techsolutions",
   "roles": ["workspace_admin", "project_manager"]
 }
 ```
-El Gateway valida la firma criptográfica y rechaza cualquier solicitud sin tenant válido.
+The API Gateway and services **reject any request** attempting to supply a `tenant_id` via query parameters or body payloads. The tenant context is extracted strictly from the verified cryptographic token signature.
 
-### Capa 2: Filtro de Dominio y Query Enforcers
-En cada microservicio (Spring Boot / .NET / FastAPI), todo repositorio y handler inyecta el `tenant_id` del contexto actual. Ningún query `SELECT`, `UPDATE` o `DELETE` se genera sin la cláusula:
+### Layer 2: Security Middleware & Connection Context Injection
+Before any database query is executed, the microservice middleware sets a PostgreSQL session-level variable on the leased connection:
 ```sql
-WHERE tenant_id = :current_tenant_id
+SET LOCAL app.current_tenant_id = 'ten_techsolutions_15d1e947';
 ```
 
-### Capa 3: PostgreSQL Row-Level Security (RLS)
-Como defensa a nivel de base de datos contra errores de código o inyecciones SQL, todas las tablas de negocio activan RLS:
+### Layer 3: Application Domain Query Enforcers
+All ORM repositories (JPA / Entity Framework Core) automatically inject `tenant_id` into `SELECT`, `UPDATE`, and `DELETE` predicates as standard practice.
+
+### Layer 4: PostgreSQL Row-Level Security (Engine Defense)
+As a physical fail-safe against software bugs or SQL injection vulnerabilities, all tenant-owned tables enforce RLS:
 
 ```sql
--- Ejemplo en workspace_db
 ALTER TABLE projects ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY tenant_isolation_policy ON projects
     FOR ALL
-    TO app_user
-    USING (tenant_id = current_setting('app.current_tenant_id', true));
+    TO PUBLIC
+    USING (
+        tenant_id = current_setting('app.current_tenant_id', true)
+        OR current_setting('app.current_tenant_id', true) = 'SYSTEM'
+    );
 ```
 
-Antes de ejecutar cualquier query en la conexión del pool:
-```sql
-SET LOCAL app.current_tenant_id = 'ten_techsolutions_01';
-```
-Si el código accidentalmente omite el filtro en el query, PostgreSQL bloqueará cualquier fila que no corresponda al inquilino establecido en la sesión.
+If an application query inadvertently omits a `WHERE` clause, PostgreSQL physically blocks reading or writing any row whose `tenant_id` does not match the active session variable.
 
 ---
 
-## 🧪 Pruebas Automatizadas de Aislamiento (Tenant Leakage Tests)
+## 🧪 Automated Tenant Leakage Testing Mandate
 
-Cada microservicio incluirá una suite de pruebas de integración específica:
-1. Crear dos inquilinos (`tenant-1` y `tenant-2`).
-2. Insertar registros en nombre de `tenant-1`.
-3. Ejecutar consultas autenticado como `tenant-2`.
-4. El test falla si se devuelve `200 OK` con registros ajenos; debe retornar `404 Not Found` o lista vacía.
+Every microservice must implement an automated integration test suite specifically designed to verify isolation:
+1. Seed test records under `tenant-1`.
+2. Execute queries and mutations authenticated as `tenant-2`.
+3. The test fails if any record from `tenant-1` is accessible; the API must return `404 Not Found` or an empty list.

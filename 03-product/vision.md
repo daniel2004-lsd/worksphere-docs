@@ -1,37 +1,37 @@
-# 03 — Visión del Producto y Propuesta de Valor (Product Vision)
+# 03 — Product Vision & Strategic Differentiation
 
-> **Documento:** Product Vision & Strategy  
-> **Estado:** Fase 0 — Definición de Negocio  
-> **Líder Técnico & Arquitecto:** Daniel (`daniel2004-lsd`)  
-> **Proyecto:** WorkSphere — Enterprise Operations Intelligence Platform
-
----
-
-## 1. Declaración de Visión
-
-> **Para** consultoras tecnológicas, fábricas de software y empresas de servicios profesionales  
-> **Que** enfrentan retrasos en sus entregas por cuellos de botella en aprobaciones, sobrecarga de equipos y fragmentación de datos  
-> **WorkSphere** es una plataforma SaaS B2B empresarial de inteligencia de operaciones  
-> **Que** conecta la estructura organizacional, los proyectos y los flujos de aprobación en un grafo operativo unificado con trazabilidad inmutable  
-> **A diferencia de** los gestores de tareas tradicionales (Jira, Asana, Monday) y plataformas SaaS propietarias cerradas  
-> **Nuestro producto** ofrece soberanía absoluta (*Self-Hosted & Open Source First*), gobernanza de datos estricta con Row-Level Security, versionamiento auditable con Liquibase e inteligencia artificial local explicable y libre de fugas de datos.
+> **Document:** Product Vision & Core Value Proposition  
+> **Status:** Phase 0 — Business Definition  
+> **Technical Lead & Architect:** Daniel (`daniel2004-lsd`)  
+> **Project:** WorkSphere — Enterprise Operations Intelligence Platform
 
 ---
 
-## 2. Los Tres Pilares de Diferenciación
+## 1. Product Vision Statement
+
+> **For** technology consultancies, software factories, and professional services firms  
+> **Who** suffer from project delivery delays due to stalled approvals, team overload, and fragmented operational data  
+> **WorkSphere** is an enterprise-grade B2B Operations Intelligence SaaS platform  
+> **That** connects organizational structure, project deliverables, and approval workflows into a unified, auditable graph  
+> **Unlike** traditional task management tools (Jira, Asana, Monday) and closed proprietary SaaS platforms  
+> **Our product** delivers complete sovereignty (*Self-Hosted & Open Source First*), strict database-level data governance via PostgreSQL Row-Level Security, audit-proof Liquibase versioning, and private, explainable local AI assistance.
+
+---
+
+## 2. The Three Pillars of Differentiation
 
 ```mermaid
 flowchart TD
-    subgraph P1["Pilar 1: El Tejido Operativo Conectivo"]
-        D1["Correlación de Hechos: Tareas bloqueadas por Aprobaciones pendientes con responsables jerárquicos claros"]
+    subgraph P1["Pillar 1: The Connective Operational Fabric"]
+        D1["Correlated Real-Time Insights: Tasks blocked by pending approvals with clear hierarchical approver assignment"]
     end
 
-    subgraph P2["Pilar 2: Soberanía & Autonomía Tecnológica"]
-        D2["Open Source Core (Apache 2.0), Self-Hosted First, sin ataduras a nubes privativas ni vendor lock-in"]
+    subgraph P2["Pillar 2: Technical Sovereignty & Autonomy"]
+        D2["Open Source Core (Apache 2.0), Self-Hosted First, zero proprietary cloud lock-in"]
     end
 
-    subgraph P3["Pilar 3: Inteligencia Local y Auditable"]
-        D3["Modelos de IA locales (Ollama/RAG) que operan bajo los permisos del usuario sin enviar secretos al exterior"]
+    subgraph P3["Pillar 3: Auditable Local Intelligence"]
+        D3["On-premise AI models (Ollama/RAG) executing strictly under user security context without data leakage"]
     end
 
     P1 --- P2 --- P3
@@ -39,45 +39,21 @@ flowchart TD
 
 ---
 
-## 3. La Tríada Esencial del MVP (Fase 1)
+## 3. The MVP Essential Triad (Phase 1 Scope)
 
-El producto mínimo viable de WorkSphere no implementará diez dominios superficiales. Demostrará la **integración vertical profunda** de tres capacidades indispensables:
+The Minimum Viable Product (MVP) demonstrates deep vertical integration across three foundational capabilities:
 
 ### 3.1. Organization & Access
-- Gestión de organizaciones inquilinas (*Multi-Tenancy*).
-- Departamentos, roles y asignaciones jerárquicas.
-- Matriz de autoridad: quién puede aprobar qué tipo de solicitud dentro de la empresa.
+- Multi-tenant company onboarding with tenant isolation.
+- Departments, teams, and hierarchical memberships.
+- Authority matrix: defining who holds the authority to approve specific operational requests.
 
 ### 3.2. Projects & Tasks
-- Proyectos con hitos y tareas críticas.
-- Estados explícitos de ciclo de vida (incluyendo `BLOCKED_BY_APPROVAL`).
-- Métricas de avance e impacto operativo.
+- Engineering projects and critical delivery milestones.
+- Explicit task lifecycle states (including `BLOCKED_BY_APPROVAL`).
+- Progress and health metrics tied to operational blockers.
 
 ### 3.3. Approval Workflows
-- Procesos de aprobación estructurados (ej. Aprobación de Cambios, Asignación de Recursos, Validación Técnica).
-- Vinculación directa: una solicitud puede bloquear o habilitar una tarea en un proyecto.
-- Historial de decisiones inmutable: actor, rol, timestamp, justificación y tiempo de ciclo.
-
----
-
-## 4. Evolución de Capacidades (Roadmap Conceptual)
-
-```
-[MVP: Tríada Esencial]
-  - Multi-tenant Organization Management
-  - Projects & Tasks con bloqueo por aprobación
-  - Approval Workflows formales e inmutables
-  - IA Resumen Operativo Local (hechos verificables)
-           │
-           ▼
-[Fase 2: Conectividad Externa & Automatización]
-  - Webhooks de entrada para GitHub / GitLab / Jira
-  - RabbitMQ Event-Driven Outbox & Sagas
-  - Notificaciones multicanal (Email, In-App)
-           │
-           ▼
-[Fase 3: Inteligencia Avanzada & Monetización SaaS]
-  - Analítica de cuellos de botella con ClickHouse
-  - Planes y control de cuotas (Billing Service)
-  - Agentes de IA asistida para balanceo de carga
-```
+- Structured approval request definitions (e.g., Budget Authorization, Scope Change, Technical Sign-off).
+- Direct binding: an approval request dynamically suspends or unblocks related project tasks.
+- Immutable decision audit trail: approver ID, role at decision time, timestamp, mandatory justification comment, and cycle time metrics.
