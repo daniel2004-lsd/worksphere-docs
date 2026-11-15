@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ApprovalResolvedEvent",
+  "description": "Evento CloudEvents v1.0 emitido por workflow-service cuando una solicitud de aprobación es aprobada o rechazada, provocando el desbloqueo o actualización de la tarea vinculada en workspace-service.",
+  "type": "object",
+  "required": [
+    "specversion",
+    "id",
+    "source",
+    "type",
+    "time",
+    "datacontenttype",
+    "data"
+  ],
+  "properties": {
+    "specversion": {
+      "type": "string",
+      "const": "1.0"
+    },
+    "id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "UUID único para deduplicación idempotente en el consumidor."
+    },
+    "source": {
+      "type": "string",
+      "const": "/services/workflow-service"
+    },
+    "type": {
+      "type": "string",
+      "const": "worksphere.workflow.approval.resolved"
+    },
+    "time": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "datacontenttype": {
+      "type": "string",
+      "const": "application/json"
+    },
+    "data": {
+      "type": "object",
+      "required": [
+        "tenantId",
+        "approvalId",
+        "targetTaskId",
+        "processType",
+        "decision",
+        "resolvedBy",
+        "comment",
+        "resolvedAt"
+      ],
+      "properties": {
+        "tenantId": {
+          "type": "string",
+          "example": "ten_techsolutions_15d1e947"
+        },
+        "approvalId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "targetTaskId": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Identificador de la tarea en workspace_db que debe desbloquearse."
+        },
+        "processType": {
+          "type": "string",
+          "enum": ["BUDGET_APPROVAL", "SCOPE_CHANGE", "RESOURCE_ALLOCATION", "TECH_VALIDATION"],
+          "example": "BUDGET_APPROVAL"
+        },
+        "decision": {
+          "type": "string",
+          "enum": ["APPROVED", "REJECTED"],
+          "example": "APPROVED"
+        },
+        "resolvedBy": {
+          "type": "string",
+          "example": "usr_maria_directora"
+        },
+        "comment": {
+          "type": "string",
+          "example": "Presupuesto aprobado para la reserva de instancias cloud."
+        },
+        "resolvedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    }
+  }
+}

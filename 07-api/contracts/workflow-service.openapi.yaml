@@ -1,0 +1,225 @@
+openapi: 3.0.3
+info:
+  title: WorkSphere Workflow Service API
+  description: API para la orquestación de procesos de negocio, solicitudes de aprobación e historial de decisiones auditables.
+  version: 1.0.0
+servers:
+  - url: http://localhost:8083/api/v1
+    description: Workflow Service Direct Local (Spring Boot 3)
+  - url: http://localhost:8000/workflow/api/v1
+    description: Via Kong Gateway
+
+paths:
+  /approvals:
+    post:
+      summary: Crear una solicitud formal de aprobación
+      operationId: createApprovalRequest
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateApprovalRequest'
+      responses:
+        '201':
+          description: Solicitud de aprobación registrada en estado PENDING
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApprovalResponse'
+        '400':
+          description: Datos de solicitud inválidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    get:
+      summary: Listar solicitudes de aprobación pendientes del tenant
+      operationId: listPendingApprovals
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [PENDING, APPROVED, REJECTED, ALL]
+            default: PENDING
+      responses:
+        '200':
+          description: Lista de solicitudes filtradas por estado
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ApprovalResponse'
+
+  /approvals/{approvalId}/decision:
+    post:
+      summary: Resolver una solicitud de aprobación (Aprobar / Rechazar)
+      description: Emite la decisión con justificación obligatoria, registra auditoría inmutable y publica el evento approval.resolved.
+      operationId: submitApprovalDecision
+      parameters:
+        - name: approvalId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApprovalDecisionRequest'
+      responses:
+        '200':
+          description: Aprobación resuelta exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApprovalResponse'
+        '400':
+          description: Comentario ausente o decisión inválida
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: La solicitud ya fue resuelta previamente y no puede alterarse
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /approvals/{approvalId}/audit:
+    get:
+      summary: Obtener el historial inmutable de auditoría de una aprobación
+      operationId: getApprovalAuditLogs
+      parameters:
+        - name: approvalId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Historial de eventos y firmas de decisión
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AuditLogResponse'
+
+components:
+  schemas:
+    CreateApprovalRequest:
+      type: object
+      required:
+        - processType
+        - targetTaskId
+        - requiredRole
+      properties:
+        processType:
+          type: string
+          enum: [BUDGET_APPROVAL, SCOPE_CHANGE, RESOURCE_ALLOCATION, TECH_VALIDATION]
+          example: BUDGET_APPROVAL
+        targetTaskId:
+          type: string
+          format: uuid
+          example: 9a2f1b40-2c71-482f-857c-f823a0198f92
+        requiredRole:
+          type: string
+          example: APPROVER
+        reason:
+          type: string
+          example: Autorización de adquisición de infraestructura cloud
+
+    ApprovalDecisionRequest:
+      type: object
+      required:
+        - decision
+        - comment
+      properties:
+        decision:
+          type: string
+          enum: [APPROVED, REJECTED]
+          example: APPROVED
+        comment:
+          type: string
+          minLength: 5
+          maxLength: 1000
+          example: Presupuesto autorizado tras validar partida en comité de operaciones.
+
+    ApprovalResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+        processType:
+          type: string
+        targetTaskId:
+          type: string
+          format: uuid
+        requesterId:
+          type: string
+        requiredRole:
+          type: string
+        status:
+          type: string
+          enum: [PENDING, APPROVED, REJECTED]
+          example: APPROVED
+        assignedApproverId:
+          type: string
+        decisionComment:
+          type: string
+        requestedAt:
+          type: string
+          format: date-time
+        resolvedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    AuditLogResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        action:
+          type: string
+          example: APPROVED
+        actorId:
+          type: string
+          example: usr_maria_directora
+        actorRole:
+          type: string
+          example: APPROVER
+        comment:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+
+    ErrorResponse:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        status:
+          type: integer
+          example: 409
+        error:
+          type: string
+          example: Conflict
+        message:
+          type: string
+          example: Approval request is already finalized and cannot be modified
