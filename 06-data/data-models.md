@@ -1,14 +1,15 @@
-# 06 — Diccionario y Modelo de Datos de la Tríada Esencial
+# 06 — Data Models & Relational Entity Dictionaries (MVP Triad)
 
-> **Estado:** 🟢 Fase 1 — Definición Técnica  
-> **Líder Técnico & Arquitecto:** Daniel (`daniel2004-lsd`)  
-> **Proyecto:** WorkSphere — Enterprise Operations Intelligence Platform  
-> **Motor:** PostgreSQL 16 (Database per Service)  
-> **Gestión:** Liquibase XML Changelogs + Row-Level Security (RLS)
+> **Document:** Enterprise Data Models & Entity Relationships  
+> **Status:** 🟢 Baseline  
+> **Technical Lead & Architect:** Daniel (`daniel2004-lsd`)  
+> **Project:** WorkSphere — Enterprise Operations Intelligence Platform  
+> **Engine:** PostgreSQL 16 (Database per Service)  
+> **Governance:** Liquibase YAML Master + SQL Modules + PostgreSQL Row-Level Security (RLS)
 
 ---
 
-## 🏛️ Topología de Persistencia por Bounded Context
+## 🏛️ Persisted Bounded Context Topologies
 
 ```mermaid
 erDiagram
@@ -88,109 +89,89 @@ erDiagram
         timestamptz timestamp
     }
 
-    ORGANIZATIONS ||--o{ MEMBERSHIPS : "contiene"
-    PROJECTS ||--o{ TASKS : "agrupa"
-    APPROVAL_REQUESTS ||--o{ APPROVAL_AUDIT_LOGS : "registra historial"
+    ORGANIZATIONS ||--o{ MEMBERSHIPS : "contains"
+    PROJECTS ||--o{ TASKS : "tracks"
+    APPROVAL_REQUESTS ||--o{ APPROVAL_AUDIT_LOGS : "records"
 ```
 
 > [!IMPORTANT]
-> **Sin Llaves Foráneas Inter-Bases de Datos:**  
-> `PROJECTS` y `APPROVAL_REQUESTS` residen en diferentes bases de datos físicas (`workspace_db` y `workflow_db`).  
-> La relación entre `TASKS.approval_request_id` y `APPROVAL_REQUESTS.id` es estrictamente **lógica** y se coordina mediante eventos en RabbitMQ y validación del `tenant_id`.
+> **No Inter-Database Foreign Keys:**  
+> `PROJECTS` and `APPROVAL_REQUESTS` reside in separate physical database instances (`workspace_db` and `workflow_db`).  
+> The relationship between `TASKS.approval_request_id` and `APPROVAL_REQUESTS.id` is strictly **logical**, synchronized via CloudEvents over RabbitMQ and verified against the authenticated `tenant_id`.
 
 ---
 
-## 1. Esquema `tenant_db` (Tenant Management Service)
+## 1. Schema `tenant_db` (Tenant Management Service)
 
-### 1.1. Tabla: `organizations`
-Almacena las empresas cliente dadas de alta en la plataforma.
-- `id` (UUID, PK, Default `gen_random_uuid()`): Identificador interno.
-- `tenant_id` (VARCHAR(64), UNIQUE, NOT NULL): Clave canónica de particionamiento (ej. `ten_techsolutions_15d1e947`).
-- `name` (VARCHAR(120), NOT NULL): Razón social o nombre comercial.
-- `slug` (VARCHAR(64), UNIQUE, NOT NULL): Identificador URL corporativo normalizado.
-- `admin_email` (VARCHAR(120), NOT NULL): Correo del administrador inicial.
+### 1.1. Table: `organizations`
+- `id` (UUID, PK, Default `gen_random_uuid()`): Internal entity identifier.
+- `tenant_id` (VARCHAR(64), UNIQUE, NOT NULL): Canonical multi-tenant partition key (e.g., `ten_techsolutions_15d1e947`).
+- `name` (VARCHAR(120), NOT NULL): Registered corporate name.
+- `slug` (VARCHAR(64), UNIQUE, NOT NULL): Normalized URL slug.
+- `admin_email` (VARCHAR(120), NOT NULL): Primary administrative contact.
 - `status` (VARCHAR(30), NOT NULL, Default `'ACTIVE'`): `ACTIVE`, `SUSPENDED`, `DELETED`.
 - `created_at`, `updated_at` (TIMESTAMPTZ, NOT NULL).
 
-### 1.2. Tabla: `memberships`
-Asocia usuarios con su rol y departamento dentro de la organización.
+### 1.2. Table: `memberships`
 - `id` (UUID, PK).
-- `tenant_id` (VARCHAR(64), NOT NULL, Indexado): Inquilino propietario.
-- `organization_id` (UUID, NOT NULL, FK a `organizations.id`).
-- `user_id` (VARCHAR(64), NOT NULL): ID del usuario emitido por Keycloak (`sub`).
+- `tenant_id` (VARCHAR(64), NOT NULL, Indexed): Tenant isolation partition key.
+- `organization_id` (UUID, NOT NULL, FK to `organizations.id`).
+- `user_id` (VARCHAR(64), NOT NULL): Keycloak user identity subject (`sub`).
 - `email` (VARCHAR(120), NOT NULL).
 - `role` (VARCHAR(40), NOT NULL): `TENANT_ADMIN`, `PROJECT_MANAGER`, `APPROVER`, `ENGINEER`.
-- `department` (VARCHAR(60)): Ej. "Engineering", "Operations", "Finance".
+- `department` (VARCHAR(60)): e.g., "Engineering", "Operations", "Finance".
 - `status` (VARCHAR(30), NOT NULL): `ACTIVE`, `INVITED`, `REVOKED`.
 
 ---
 
-## 2. Esquema `workspace_db` (Workspace Service — .NET 9)
+## 2. Schema `workspace_db` (Workspace Service — .NET 9)
 
-### 2.1. Tabla: `projects`
+### 2.1. Table: `projects`
 - `id` (UUID, PK).
-- `tenant_id` (VARCHAR(64), NOT NULL, Indexado): Aislamiento RLS.
-- `key` (VARCHAR(10), NOT NULL): Prefijo corto de proyecto (ej. `WKS`, `ALPHA`).
+- `tenant_id` (VARCHAR(64), NOT NULL, Indexed): Tenant isolation key.
+- `key` (VARCHAR(10), NOT NULL): Project prefix code (e.g., `WKS`, `ALPHA`).
 - `name` (VARCHAR(120), NOT NULL).
 - `description` (TEXT).
 - `status` (VARCHAR(30), NOT NULL): `PLANNING`, `ACTIVE`, `ON_HOLD`, `COMPLETED`.
-- `lead_user_id` (VARCHAR(64), NOT NULL): Responsable del proyecto.
-- `start_date`, `target_date` (TIMESTAMPTZ).
+- `lead_user_id` (VARCHAR(64), NOT NULL): Assigned project delivery lead.
+- `created_at` (TIMESTAMPTZ, NOT NULL).
 
-### 2.2. Tabla: `tasks`
+### 2.2. Table: `tasks`
 - `id` (UUID, PK).
-- `tenant_id` (VARCHAR(64), NOT NULL, Indexado): Aislamiento RLS.
-- `project_id` (UUID, NOT NULL, FK a `projects.id`).
-- `task_number` (VARCHAR(20), NOT NULL): Ej. `WKS-104`.
+- `tenant_id` (VARCHAR(64), NOT NULL, Indexed): Tenant isolation key.
+- `project_id` (UUID, NOT NULL, FK to `projects.id`).
+- `task_number` (VARCHAR(20), NOT NULL): e.g., `WKS-104`.
 - `title` (VARCHAR(150), NOT NULL).
 - `description` (TEXT).
 - `status` (VARCHAR(30), NOT NULL): `TODO`, `IN_PROGRESS`, `BLOCKED_BY_APPROVAL`, `READY_FOR_REVIEW`, `DONE`.
 - `priority` (VARCHAR(20), NOT NULL): `LOW`, `MEDIUM`, `HIGH`, `CRITICAL`.
-- `assignee_id` (VARCHAR(64)): Usuario asignado.
-- `approval_request_id` (UUID): ID de la solicitud de aprobación externa en `workflow_db`.
+- `assignee_id` (VARCHAR(64)): Assigned engineer user ID.
+- `approval_request_id` (UUID): Foreign logical reference to `approval_requests.id` in `workflow_db`.
 - `created_at`, `updated_at` (TIMESTAMPTZ, NOT NULL).
 
 ---
 
-## 3. Esquema `workflow_db` (Workflow Service — Spring Boot 3)
+## 3. Schema `workflow_db` (Workflow Service — Spring Boot 3)
 
-### 3.1. Tabla: `approval_requests`
+### 3.1. Table: `approval_requests`
 - `id` (UUID, PK).
-- `tenant_id` (VARCHAR(64), NOT NULL, Indexado): Aislamiento RLS.
+- `tenant_id` (VARCHAR(64), NOT NULL, Indexed): Tenant isolation key.
 - `process_type` (VARCHAR(50), NOT NULL): `BUDGET_APPROVAL`, `SCOPE_CHANGE`, `RESOURCE_ALLOCATION`, `TECH_VALIDATION`.
-- `target_task_id` (UUID, NOT NULL): ID lógico de la tarea afectada en `workspace_db`.
-- `requester_id` (VARCHAR(64), NOT NULL): Usuario que solicita la aprobación.
-- `required_role` (VARCHAR(40), NOT NULL): Rol autorizado para aprobar (ej. `APPROVER`, `TENANT_ADMIN`).
+- `target_task_id` (UUID, NOT NULL): Logical reference to task in `workspace_db`.
+- `requester_id` (VARCHAR(64), NOT NULL): User initiating the request.
+- `required_role` (VARCHAR(40), NOT NULL): e.g., `APPROVER`, `TENANT_ADMIN`.
 - `status` (VARCHAR(30), NOT NULL): `PENDING`, `APPROVED`, `REJECTED`, `CANCELLED`.
-- `assigned_approver_id` (VARCHAR(64)): Aprobador específico si aplica.
-- `decision_comment` (TEXT): Justificación obligatoria de la resolución.
+- `assigned_approver_id` (VARCHAR(64)): Specific approver if delegated.
+- `decision_comment` (TEXT): Mandatory justification submitted upon decision.
 - `requested_at` (TIMESTAMPTZ, NOT NULL).
-- `resolved_at` (TIMESTAMPTZ): Momento exacto de la decisión.
+- `resolved_at` (TIMESTAMPTZ): Final decision timestamp.
 
-### 3.2. Tabla: `approval_audit_logs` (Historial Inmutable)
+### 3.2. Table: `approval_audit_logs` (Immutable Decision Trail)
 - `id` (UUID, PK).
 - `tenant_id` (VARCHAR(64), NOT NULL).
-- `approval_request_id` (UUID, NOT NULL, FK a `approval_requests.id`).
+- `approval_request_id` (UUID, NOT NULL, FK to `approval_requests.id`).
 - `action` (VARCHAR(30), NOT NULL): `SUBMITTED`, `ASSIGNED`, `APPROVED`, `REJECTED`.
 - `actor_id` (VARCHAR(64), NOT NULL).
 - `actor_role` (VARCHAR(40), NOT NULL).
 - `comment` (TEXT).
 - `timestamp` (TIMESTAMPTZ, NOT NULL, Default `NOW()`).
-
----
-
-## 4. Políticas Row-Level Security (RLS) Obligatorias
-
-En cada una de las tablas anteriores (`organizations`, `memberships`, `projects`, `tasks`, `approval_requests`, `approval_audit_logs`) el changelog inicial de Liquibase aplica:
-
-```sql
-ALTER TABLE <table_name> ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY tenant_isolation_policy ON <table_name>
-    FOR ALL
-    TO PUBLIC
-    USING (
-        tenant_id = current_setting('app.current_tenant_id', true)
-        OR current_setting('app.current_tenant_id', true) = 'SYSTEM'
-    );
-```

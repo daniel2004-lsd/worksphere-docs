@@ -1,32 +1,38 @@
-# WorkSphere — Fuente Única de Verdad (SSOT) & Architecture Governance
+# WorkSphere — Single Source of Truth (SSOT) & Technical Governance
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
-[![Status: Inception](https://img.shields.io/badge/Status-Inception-green.svg)](00-sdd-guide.md)
-[![Architecture: Event-Driven Microservices](https://img.shields.io/badge/Architecture-Distributed%20Microservices-orange.svg)](05-architecture/README.md)
-[![Multi-Tenancy: RLS + Logical Isolation](https://img.shields.io/badge/Multi--Tenancy-RLS%20Isolation-purple.svg)](05-architecture/multi-tenancy-strategy.md)
+[![Status: Inception & Design](https://img.shields.io/badge/Status-Inception%20%26%20Design-green.svg)](00-sdd-guide.md)
+[![Architecture: Event-Driven Microservices](https://img.shields.io/badge/Architecture-Event--Driven%20Microservices-orange.svg)](05-architecture/README.md)
+[![Multi-Tenancy: PostgreSQL RLS](https://img.shields.io/badge/Multi--Tenancy-PostgreSQL%20RLS-purple.svg)](05-architecture/multi-tenancy-strategy.md)
+[![Database: Liquibase Versioned](https://img.shields.io/badge/Database-Liquibase%20YAML-red.svg)](06-data/liquibase-standards.md)
 
-> Repositorio oficial de **Documentación de Diseño de Software (SDD)** y Gobernanza Técnica para la plataforma empresarial SaaS Multi-Tenant **WorkSphere**.
-
----
-
-## 🎯 ¿Qué es WorkSphere?
-
-**WorkSphere** es una plataforma SaaS B2B empresarial multi-inquilino (*multi-tenant*) diseñada para permitir a distintas organizaciones gestionar sus equipos, espacios de trabajo, tareas, flujos de aprobación y procesos de negocio, suscripciones y métricas de analítica desde un entorno unificado, con estricto aislamiento lógico de datos y arquitectura distribuida orientada a eventos.
+> Official repository for **Software Design Documentation (SDD)**, architectural governance, and system specifications for the **WorkSphere Enterprise Operations Intelligence Platform**.
 
 ---
 
-## 🏛️ Principios y Reglas de Oro de la Arquitectura
+## 🎯 What is WorkSphere?
 
-1. **Database per Service:** Cada microservicio es dueño absoluto de su persistencia. Ningún servicio consulta ni modifica directamente la base de datos de otro.
-2. **Event-Driven & Eventual Consistency:** Comunicación asíncrona respaldada por RabbitMQ para desacoplar operaciones complejas.
-3. **Transactional Outbox Pattern:** Cero pérdida de eventos entre el commit a base de datos y la publicación en el broker.
-4. **Idempotencia Obligatoria:** Los consumidores de eventos y operaciones críticas de pago o aprovisionamiento deben tolerar duplicados mediante claves de idempotencia.
-5. **Aislamiento Multi-Tenant de Primer Nivel:** Cada entidad de negocio pertenece a un `tenant_id`. Defensa en profundidad con Row-Level Security (RLS) en PostgreSQL y filtros a nivel de dominio.
-6. **Diseño Guiado por el Dominio (DDD):** Límites claros (*Bounded Contexts*) y Clean Architecture en servicios empresariales.
+**WorkSphere** is an enterprise-grade B2B Multi-Tenant SaaS platform designed to eliminate operational context blindness in knowledge-intensive firms (such as software consultancies and professional service agencies).
+
+Unlike traditional task managers that operate as isolated silos, WorkSphere connects the **organizational structure**, **approval workflows**, and **project deliverables** into a unified, auditable operational graph with real-time bottleneck detection and explainable local AI assistance.
 
 ---
 
-## 🗺️ Mapa de Dependencias de Documentación (SDD Framework)
+## 🏛️ Core Architectural Principles (Non-Negotiable)
+
+1. **Strict Repository Separation:**  
+   - `worksphere-docs`: Exclusively for architecture, requirements, contracts, and governance. No source code.  
+   - `worksphere-*-service`: Application source code only.  
+   - `worksphere-*-db`: Liquibase declarative migrations and PostgreSQL policies only.
+2. **Database per Service:** Every service has exclusive ownership of its data store. Cross-database queries or shared foreign keys are strictly prohibited.
+3. **Multi-Tenancy Defense-in-Depth:** Every business table is partitioned by `tenant_id` and protected at the database engine level via **PostgreSQL Row-Level Security (RLS)**.
+4. **Asynchronous Orchestration via Outbox:** Inter-service coordination (such as unblocking tasks after approval) is handled asynchronously via RabbitMQ and the **Transactional Outbox Pattern**.
+5. **Universal Language Mandate:** All documentation, contracts, code comments, and ADRs are maintained **100% in professional English**.
+6. **Local-Only SDD & AI Workspaces:** Local tool configurations (`.specify/`, `.codex/`, `.claude/`, `.antigravity/`) and environment secrets are blacklisted from Git repositories.
+
+---
+
+## 🗺️ Documentation Dependency Map (SDD Framework)
 
 ```mermaid
 flowchart TD
@@ -37,42 +43,21 @@ flowchart TD
     AR --> AP["07-api"]
     AR --> EV["14-events"]
     AR --> UM["08-uml"]
-    DA --> SV["09-services"]
-    AP --> SV
-    EV --> SV
-    UM --> SV
-    SV --> UX["12-ux-ui"]
-    SV --> DO["10-devops"]
-    SV --> QA["11-quality"]
-    SV --> OP["13-operations"]
 ```
 
 ---
 
-## 📚 Estructura de las Secciones
+## 📚 Section Directory
 
-| Sección | Responsabilidad y Pregunta Clave |
+| Section | Scope and Core Responsibility |
 |---|---|
-| [`00-governance/`](./00-governance/README.md) | ¿Cómo planifica, versiona, revisa y aprueba el equipo el trabajo técnico? |
-| [`01-context/`](./01-context/README.md) | ¿Por qué existe WorkSphere, a quién sirve y cuáles son sus límites de sistema? |
-| [`02-domain/`](./02-domain/README.md) | ¿Cuáles son los Bounded Contexts y cómo interactúan los conceptos de negocio? |
-| [`03-product/`](./03-product/README.md) | Visión del producto, propuesta de valor B2B y modelos de monetización SaaS. |
-| [`04-requirements/`](./04-requirements/README.md) | Requerimientos funcionales (SRS, HU) y no funcionales (SLAs, aislamiento, rendimiento). |
-| [`05-architecture/`](./05-architecture/README.md) | C4 Model, microservicios, Outbox, Saga, aislamiento multi-tenant y ADRs. |
-| [`06-data/`](./06-data/README.md) | Estrategia de bases de datos por servicio, esquemas, migraciones y RLS. |
-| [`07-api/`](./07-api/README.md) | API Gateway (Kong), contratos REST / OpenAPI y políticas de enrutamiento. |
-| [`08-uml/`](./08-uml/README.md) | Diagramas de secuencia distribuida, C4 contenedores y diagramas de estados. |
-| [`09-services/`](./09-services/README.md) | Especificación individual de los 8 microservicios de la plataforma. |
-| [`10-devops/`](./10-devops/README.md) | Docker Compose para desarrollo local, redes, variables de entorno y CI/CD. |
-| [`11-quality/`](./11-quality/README.md) | Pruebas de integración, aislamiento entre tenants, contratos y carga. |
-| [`12-ux-ui/`](./12-ux-ui/README.md) | Design System web empresarial (React + TS + Tailwind), vistas clave y flujos UX. |
-| [`13-operations/`](./13-operations/README.md) | Observabilidad (Prometheus, Grafana, OpenTelemetry, Loki), alertas y runbooks. |
-| [`14-events/`](./14-events/README.md) | Catálogo de eventos asíncronos en RabbitMQ, esquemas CloudEvents y DLQ. |
-
----
-
-## 🚀 Metodología de Trabajo
-
-1. Consulta [`00-sdd-guide.md`](./00-sdd-guide.md) para conocer las fases del proyecto y los gates de aprobación.
-2. Todo cambio arquitectónico se debate y documenta en un **ADR (Architecture Decision Record)** dentro de `05-architecture/decisions/` antes de codificarlo.
-3. Principio de **Living Documentation**: los contratos y documentación evolucionan junto al código.
+| [`00-governance/`](./00-governance/README.md) | Branching strategy, DoR, DoD, agile conventions, secret hygiene, and repository separation. |
+| [`01-context/`](./01-context/problem-framing.md) | Problem statement, operational context blindness, and system justification. |
+| [`02-domain/`](./02-domain/domain-map.md) | Bounded contexts, domain boundaries, and polyglot technology mapping. |
+| [`03-product/`](./03-product/vision.md) | Product vision, three pillars of value, and prioritized product backlog (`EPC-01` to `EPC-04`). |
+| [`04-requirements/`](./04-requirements/user-stories.md) | Functional requirements, Gherkin acceptance criteria, and traceability matrix. |
+| [`05-architecture/`](./05-architecture/README.md) | C4 architecture models, multi-tenancy strategy, and Architecture Decision Records (ADRs). |
+| [`06-data/`](./06-data/data-models.md) | Domain ERDs, data dictionaries, and canonical Liquibase standards (`01_ddl` to `05_rollbacks`). |
+| [`07-api/`](./07-api/contracts/) | OpenAPI 3.0 formal specifications for Gateway, Workspace, and Workflow APIs. |
+| [`08-uml/`](./08-uml/c4-architecture-diagrams.md) | C4 Context (Level 1) and Container (Level 2) system diagrams. |
+| [`14-events/`](./14-events/contracts/) | CloudEvents v1.0 specifications, RabbitMQ topic exchanges, and DLQ policies. |

@@ -1,42 +1,43 @@
-# ADR-001: Arquitectura de Microservicios Distribuidos y Multi-Tenancy
+# ADR-001: Distributed Microservices Architecture and Multi-Tenancy
 
-- **Estado:** Aceptado
-- **Fecha:** 2026-11-15
-- **Decisores:** Daniel (Arquitecto de Software & Tech Lead)
-
----
-
-## 1. Contexto y Problema
-
-WorkSphere es una plataforma SaaS B2B donde distintas organizaciones gestionan equipos, flujos de trabajo, facturación y analítica. Los requerimientos exigen:
-- Aislamiento estricto de datos entre empresas.
-- Escalado independiente de componentes con cargas dispares (ej. analítica vs. aprobaciones transaccionales).
-- Resiliencia: la caída de un servicio secundario (ej. notificaciones) no debe impedir la operación de proyectos.
+- **Status:** Accepted
+- **Date:** 2026-11-15
+- **Decision Makers:** Daniel (`daniel2004-lsd`) — Software Architect & Technical Lead
+- **Scope:** Universal across all WorkSphere backend services
 
 ---
 
-## 2. Decisión
+## 1. Context and Problem Statement
 
-Se decide implementar una **arquitectura de microservicios con Database-per-Service** y **comunicación asíncrona orientada a eventos**:
-
-1. **Aislamiento Multi-Tenancy:** Particionamiento lógico con columna discriminadora `tenant_id` y aplicación de **PostgreSQL Row-Level Security (RLS)** como defensa en profundidad.
-2. **Event-Driven:** Publicación confiable mediante el patrón **Transactional Outbox** y RabbitMQ como event broker.
-3. **Distribución Políglota Justificada:**
-   - **Java / Spring Boot:** Dominios empresariales ricos (Tenant Management, Workflow).
-   - **C# / .NET:** Servicios con reglas transaccionales estructuradas (Workspace, Billing).
-   - **Go:** Microservicios I/O bound y concurrentes (Files, Notifications).
-   - **Python / FastAPI:** Procesamiento analítico y consultas a ClickHouse (Analytics).
-   - **Keycloak:** Proveedor de identidad y emisión centralizada de tokens OIDC/OAuth2.
+WorkSphere is an enterprise B2B SaaS platform designed to support multiple organizations managing projects, workflows, and operations. The platform requires:
+- Strict logical data isolation between customer companies.
+- Independent scalability across distinct workloads (e.g., analytical telemetry vs. transactional state machines).
+- High fault tolerance: failure in non-critical components (e.g., notifications) must never disrupt core delivery operations.
 
 ---
 
-## 3. Consecuencias
+## 2. Decision
 
-### Positivas:
-- Aislamiento total del fallo: si un servicio colapsa, los demás continúan operando.
-- Flexibilidad para escalar servicios según su demanda de CPU/Memoria.
-- Seguridad reforzada con RLS en cada base de datos independiente.
+We adopt a **distributed microservices architecture with Database-per-Service and Event-Driven asynchronous communication**:
 
-### Desafíos & Mitigaciones:
-- **Complejidad distribuida:** Se mitiga con trazabilidad distribuida (OpenTelemetry) y estándares SDD estrictos.
-- **Consistencia eventual:** Se asume el compromiso; operaciones críticas de negocio se coordinan mediante patrones Saga y reintentos idempotentes.
+1. **Logical Multi-Tenancy:** Single shared physical database cluster per microservice, using a discriminator `tenant_id` column protected by **PostgreSQL Row-Level Security (RLS)** as defense-in-depth.
+2. **Event-Driven Resilience:** Asynchronous communication decoupled by **RabbitMQ** with mandatory **Transactional Outbox** implementation to eliminate dual-write hazards.
+3. **Justified Polyglot Distribution:**
+   - **Java / Spring Boot 3:** Complex enterprise domains with rich lifecycle state machines (`tenant-service`, `workflow-service`).
+   - **C# / ASP.NET Core (.NET 9):** High-throughput transactional data operations with strict contract validation (`workspace-service`, `billing-service`).
+   - **Go 1.22:** Concurrent, I/O-intensive network proxies and media pipelines (`notification-service`, `file-service`).
+   - **Python 3.12 / FastAPI:** Analytical processing, aggregation, and local LLM/RAG pipelines (`analytics-service`).
+   - **Keycloak:** Off-the-shelf, open-source identity provider managing OpenID Connect (OIDC), OAuth2, and RBAC token issuance.
+
+---
+
+## 3. Consequences
+
+### Positive:
+- Total fault isolation: failure of one microservice does not bring down the entire platform.
+- Granular vertical scaling based on CPU and memory demands of specific domains.
+- Data sovereignty and defense-in-depth enforcement across all operational layers.
+
+### Operational Challenges & Mitigations:
+- **Distributed Complexity:** Mitigated by strict Software Design Documentation (SDD), formal OpenAPI/CloudEvents contracts, and OpenTelemetry tracing.
+- **Eventual Consistency:** Acknowledged by design; cross-service workflows are coordinated via Choreography Sagas and idempotent consumers.

@@ -1,93 +1,81 @@
-# ADR-002: Estrategia de Aislamiento Multi-Tenant con Keycloak OIDC y PostgreSQL RLS
+# ADR-002: Multi-Tenant Data Isolation Strategy with Keycloak OIDC and PostgreSQL RLS
 
-- **Estado:** Aceptado
-- **Fecha:** 2026-11-15
-- **Decisores:** Daniel (Arquitecto de Software & Tech Lead)
-- **Ámbito:** Todos los microservicios y bases de datos relacionales de WorkSphere
-
----
-
-## 1. Contexto y Problema
-
-WorkSphere es una plataforma SaaS B2B empresarial donde múltiples organizaciones comparten la misma infraestructura de cómputo y clústeres de base de datos (*Shared Database, Shared Schema* por microservicio).
-
-Bajo ninguna circunstancia los datos de una empresa (`tenant-A`) pueden ser visibles ni modificados por usuarios de otra empresa (`tenant-B`).
-
-Los riesgos que debemos mitigar son:
-1. **Filtros olvidados en consultas de aplicación:** Si un desarrollador o agente de IA omite accidentalmente la cláusula `WHERE tenant_id = :current_tenant_id` en una consulta JPA o Entity Framework, la base de datos podría filtrar registros ajenos.
-2. **Inyección SQL o evasión de ORM:** Una vulnerabilidad a nivel de código no debe comprometer los datos de otros clientes.
-3. **Falsificación de identidad o contexto de tenant:** Un usuario no puede inyectar un `tenant_id` arbitrario en los headers o body de las peticiones HTTP.
+- **Status:** Accepted
+- **Date:** 2026-11-15
+- **Decision Makers:** Daniel (`daniel2004-lsd`) — Software Architect & Technical Lead
+- **Scope:** All relational microservices and databases in WorkSphere
 
 ---
 
-## 2. Alternativas Evaluadas
+## 1. Context and Problem Statement
 
-| Opción | Descripción | Ventajas | Desventajas |
-|---|---|---|---|
-| **Opción A: Base de datos separada por tenant** | Una base de datos física o esquema completo por cada empresa cliente. | Aislamiento físico absoluto. | Costo exorbitante en infraestructura, dificultad de orquestación de miles de migraciones con Liquibase y problemas de conexión en local. |
-| **Opción B: Aislamiento exclusivo a nivel de aplicación** | Filtrado únicamente mediante cláusulas `WHERE tenant_id = ?` en el código del microservicio. | Sencillo de implementar inicialmente. | **Altísimo riesgo de fuga de datos (*Tenant Leakage*)**: un solo bug en un query expone datos de toda la plataforma. |
-| **Opción C: Híbrido — Contexto Criptográfico OIDC + PostgreSQL Row-Level Security (RLS)** | Token JWT firmado por Keycloak que contiene el claim inmutable `tenant_id`, complementado con políticas RLS obligatorias en todas las tablas de PostgreSQL. | **Defensa en profundidad**: aunque el código falle, el motor de PostgreSQL bloquea físicamente la lectura/escritura de filas ajenas. | Requiere configurar la sesión de conexión con `SET LOCAL app.current_tenant_id` en el pool antes de cada transacción. |
+WorkSphere is a multi-tenant platform where multiple companies share the same compute instances and database instances (*Shared Database, Shared Schema* per microservice).
+
+Data belonging to Company A (`tenant-A`) must never be accessible or mutable by users of Company B (`tenant-B`).
+
+Risks mitigated:
+1. **Accidental Developer Omission:** A query in an ORM omitting `WHERE tenant_id = :tenant_id` must not leak cross-tenant records.
+2. **SQL Injection Vulnerabilities:** Application-level flaws must be stopped by the database engine itself.
+3. **Identity Spoofing:** Users must not be able to forge or inject arbitrary tenant IDs in HTTP payloads.
 
 ---
 
-## 3. Decisión
+## 2. Evaluated Alternatives
 
-Se adopta la **Opción C: Enfoque de Defensa en Profundidad en 3 Capas**:
+| Option | Description | Trade-offs |
+|---|---|---|
+| **Option A: Separate Database per Tenant** | Creating a physical database or isolated schema per customer company. | High isolation, but unsustainable infrastructure cost, connection pool exhaustion, and complex Liquibase migration orchestration across thousands of tenants. |
+| **Option B: Application-Level Filtering Only** | Relying strictly on ORM interceptors and `WHERE tenant_id = ?` clauses. | High risk of critical data leaks (*Tenant Leakage*) if a single query omits the predicate. |
+| **Option C: Hybrid OIDC Token Context + PostgreSQL Row-Level Security (RLS)** | JWT tokens issued by Keycloak contain immutable `tenant_id` claims, combined with native PostgreSQL RLS engine policies. | **Selected:** Defense-in-depth. Even if application code errs, PostgreSQL physically blocks reading or writing rows belonging to other tenants. |
+
+---
+
+## 3. Decision
+
+We implement a **3-Layer Defense-in-Depth Model**:
 
 ```mermaid
 flowchart TD
-    Client["Cliente Web / Móvil"] -->|HTTP Request con Bearer JWT| Kong["1. API Gateway (Kong) / OIDC Validator"]
-    Kong -->|Valida firma de Keycloak| Micro["2. Microservicio (Spring Boot / .NET)"]
-    Micro -->|Extrae tenant_id del claim JWT| Interceptor["Security Context Interceptor"]
-    Interceptor -->|Inyecta variable de sesión en la conexión| DB[("3. PostgreSQL")]
-    DB -->|Aplica Policy de RLS| Rows["Filas Aisladas del Tenant"]
+    Client["Web / Mobile Client"] -->|HTTP with Bearer JWT| Kong["1. API Gateway / OIDC Validator"]
+    Kong -->|Verifies Keycloak signature| Micro["2. Microservice Security Context"]
+    Micro -->|Extracts immutable tenant_id claim| Interceptor["Connection Pool Interceptor"]
+    Interceptor -->|Executes: SET LOCAL app.current_tenant_id| DB[("3. PostgreSQL Engine")]
+    DB -->|Applies RLS Policy| Rows["Physical Tenant-Isolated Rows"]
 ```
 
-### Capa 1: Identidad y Contexto Inmutable (Keycloak)
-- El usuario se autentica contra Keycloak.
-- Keycloak emite un token JWT que incluye de forma estricta los claims de tenant y organización:
+### 1. Immutable Identity Context (Keycloak OIDC)
+- Tokens issued contain:
   ```json
   {
     "sub": "usr_99812",
     "email": "carlos@techsolutions.com",
     "tenant_id": "ten_techsolutions_15d1e947",
-    "organization_slug": "techsolutions",
     "roles": ["workspace_admin", "project_manager"]
   }
   ```
-- El Gateway y los microservicios **nunca aceptan el `tenant_id` desde el body o query params** para determinar el inquilino; se extrae únicamente del payload criptográfico firmado del JWT.
+- Microservices extract the tenant identity strictly from the verified cryptographic JWT signature.
 
-### Capa 2: Filtro de Dominio a Nivel de Aplicación
-- Los repositorios y servicios inyectan automáticamente el `tenant_id` en todas las operaciones de inserción y consulta como primer nivel de control.
+### 2. Session Context Injection
+- The application connection pool executes `SET LOCAL app.current_tenant_id = '<tenant_id>'` before every transaction.
 
-### Capa 3: PostgreSQL Row-Level Security (RLS) como Barrera Física
-- Toda tabla de negocio que pertenezca a un inquilino **debe activar RLS** en su changelog de Liquibase:
+### 3. PostgreSQL Engine Defense (RLS)
+- Every tenant-owned table enables RLS in its Liquibase changelog:
   ```sql
-  ALTER TABLE <nombre_tabla> ENABLE ROW LEVEL SECURITY;
+  ALTER TABLE <table_name> ENABLE ROW LEVEL SECURITY;
   
-  CREATE POLICY tenant_isolation_policy ON <nombre_tabla>
-      FOR ALL
-      TO PUBLIC
+  CREATE POLICY tenant_isolation_policy ON <table_name>
+      FOR ALL TO PUBLIC
       USING (
           tenant_id = current_setting('app.current_tenant_id', true)
           OR current_setting('app.current_tenant_id', true) = 'SYSTEM'
       );
   ```
-- Antes de ejecutar cualquier query en la conexión del pool:
-  ```sql
-  SET LOCAL app.current_tenant_id = 'ten_techsolutions_15d1e947';
-  ```
-- Si un query malicioso o defectuoso intenta hacer `SELECT * FROM tasks`, PostgreSQL solo retornará las filas cuyo `tenant_id` coincida con la variable de sesión actual.
 
 ---
 
-## 4. Consecuencias
+## 4. Consequences
 
-### Positivas:
-- **Seguridad comprobable y auditable:** La base de datos es la última línea de defensa infalible.
-- **Escalabilidad y eficiencia de recursos:** Permite miles de inquilinos en una misma base de datos sin sobrecostes de infraestructura.
-- **Trazabilidad:** Facilita la auditoría de accesos por tenant.
-
-### Desafíos & Mitigaciones:
-- **Sobrecarga de conexión:** Ejecutar `SET LOCAL` en cada transacción del pool de conexiones. Se mitiga mediante interceptores nativos de HikariCP / EF Core DbConnectionInterceptor.
-- **Procesos en segundo plano (Workers / Schedulers):** Los workers del Outbox y consumidores de RabbitMQ que operan en nombre del sistema deben identificarse explícitamente como `SYSTEM` (`SET LOCAL app.current_tenant_id = 'SYSTEM'`) para procesar eventos de cualquier tenant de forma autorizada.
+### Positive:
+- Verifiable, audit-proof database security.
+- High resource efficiency and scalability for thousands of tenants.
+- System workers (Outbox relay, RabbitMQ consumers) authenticate explicitly as `SYSTEM` to process cross-tenant events in background tasks safely.

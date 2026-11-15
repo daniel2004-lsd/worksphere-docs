@@ -1,28 +1,32 @@
-# 02 — Mapa de Dominios y Bounded Contexts (DDD)
+# 02 — Domain Map & Bounded Contexts (DDD)
 
-> **Propósito:** Delimitar formalmente las fronteras de los servicios para evitar acoplamiento, duplicidad de datos y llamadas circulares.
+> **Document:** Domain-Driven Design Architecture  
+> **Status:** 🟢 Baseline  
+> **Technical Lead & Architect:** Daniel (`daniel2004-lsd`)  
+> **Project:** WorkSphere — Enterprise Operations Intelligence Platform  
+> **Purpose:** Formally delineate service boundaries to eliminate coupling, data duplication, and circular inter-service dependencies.
 
 ---
 
-## 🗺️ Mapa de Bounded Contexts
+## 🗺️ Bounded Contexts Map
 
 ```mermaid
 flowchart TD
-    subgraph Core["Núcleo de Negocio"]
-        TM["Tenant Management (Java/Spring)<br/>- Organizaciones<br/>- Membresías<br/>- Invitaciones"]
-        WS["Workspace Context (.NET)<br/>- Espacios de Trabajo<br/>- Proyectos & Tableros<br/>- Tareas & Comentarios"]
-        WF["Workflow Context (Java/Spring)<br/>- Definición de Procesos<br/>- Flujos de Aprobación<br/>- Transición de Estados"]
+    subgraph Core["Core Business Domains"]
+        TM["Tenant Management (Java/Spring)<br/>- Organizations<br/>- Memberships<br/>- Invitations"]
+        WS["Workspace Context (.NET)<br/>- Workspaces<br/>- Projects & Boards<br/>- Tasks & Comments"]
+        WF["Workflow Context (Java/Spring)<br/>- Process Definitions<br/>- Approval Workflows<br/>- State Transitions"]
     end
 
-    subgraph Monetization["Suscripciones & Facturación"]
-        BL["Billing Context (.NET)<br/>- Planes SaaS<br/>- Suscripciones<br/>- Facturación & Límites"]
+    subgraph Monetization["Subscriptions & Billing"]
+        BL["Billing Context (.NET)<br/>- SaaS Plans<br/>- Subscriptions<br/>- Invoicing & Usage Limits"]
     end
 
-    subgraph Platform["Servicios de Plataforma & Soporte"]
-        ID["Identity & Access (Keycloak + Java)<br/>- Autenticación OIDC/OAuth2<br/>- Roles & Permisos (RBAC)<br/>- MFA"]
-        NT["Notifications (Go)<br/>- Envíos de Emails<br/>- Alertas In-App<br/>- Webhooks"]
-        FM["File Management (Go)<br/>- Subida S3 / MinIO<br/>- Metadatos & Cuotas<br/>- URLs prefirmadas"]
-        AN["Analytics (Python/FastAPI)<br/>- ClickHouse OLAP<br/>- Métricas de uso<br/>- Reportes de productividad"]
+    subgraph Platform["Platform & Supporting Capabilities"]
+        ID["Identity & Access (Keycloak + Java)<br/>- OIDC / OAuth2 Authentication<br/>- Roles & Permissions (RBAC)<br/>- MFA"]
+        NT["Notifications (Go)<br/>- Outbound Emails<br/>- In-App Alerts<br/>- Webhooks"]
+        FM["File Management (Go)<br/>- S3 / MinIO Uploads<br/>- Quotas & Metadata<br/>- Presigned URLs"]
+        AN["Analytics & Intelligence (Python/FastAPI)<br/>- ClickHouse OLAP<br/>- Telemetry & Usage Metrics<br/>- Local Explainable AI"]
     end
 
     TM -.->|"OrganizationCreated / PlanChanged"| BL
@@ -35,23 +39,26 @@ flowchart TD
 
 ---
 
-## 🏛️ Matriz de Responsabilidades y Runtimes
+## 🏛️ Responsibility & Polyglot Runtime Matrix
 
-| Bounded Context | Responsabilidad Principal | Runtime / Stack | Base de Datos |
+| Bounded Context | Core Responsibility | Runtime / Stack | Data Store |
 |---|---|---|---|
-| **Identity & Access** | Autenticación centralizada, SSO, emisión de JWTs con claims de Tenant y RBAC. | Keycloak + Java | PostgreSQL (`iam_db`) |
-| **Tenant Management** | Alta de organizaciones, configuración de inquilinos, membresías y suscripción activa. | Java 21 / Spring Boot 3 | PostgreSQL (`tenant_db`) |
-| **Workspace** | Gestión de proyectos, listas de tareas, asignaciones y tableros colaborativos. | C# 12 / .NET 9 | PostgreSQL (`workspace_db`) |
-| **Workflow** | Máquinas de estado de procesos de aprobación y automatizaciones de tareas. | Java 21 / Spring Boot 3 | PostgreSQL (`workflow_db`) |
-| **Billing** | Gestión de planes, ciclos de cobro, facturas e integración con pasarela de pago. | C# 12 / .NET 9 | PostgreSQL (`billing_db`) |
-| **Notifications** | Procesamiento asíncrono de alertas, plantillas de correo y notificaciones push. | Go 1.22 | PostgreSQL / Redis (`notify_db`) |
-| **File Management** | Carga y gestión segura de documentos adjuntos asociados a tareas y proyectos. | Go 1.22 | MinIO (S3) + PostgreSQL (`files_db`) |
-| **Analytics** | Agregación de métricas de uso, telemetría de tareas y reportes de productividad. | Python 3.12 / FastAPI | ClickHouse (OLAP) |
+| **Identity & Access** | Centralized authentication, SSO, OIDC token issuance with immutable Tenant claims and RBAC roles. | Keycloak + Java | PostgreSQL (`iam_db`) |
+| **Tenant Management** | Enterprise tenant onboarding, organization lifecycle, memberships, and department structures. | Java 21 / Spring Boot 3 | PostgreSQL (`tenant_db`) |
+| **Workspace** | Engineering projects, delivery milestones, tasks, boards, and approval-blocked states. | C# / ASP.NET Core (.NET 9) | PostgreSQL (`workspace_db`) |
+| **Workflow** | State machines for formal approval requests, decision audit logs, and operational unblocking. | Java 21 / Spring Boot 3 | PostgreSQL (`workflow_db`) |
+| **Billing** | SaaS subscription tiers, billing cycles, invoices, and quota enforcement. | C# / ASP.NET Core (.NET 9) | PostgreSQL (`billing_db`) |
+| **Notifications** | Asynchronous email dispatch, mobile push notifications, and in-app alert feeds. | Go 1.22 | PostgreSQL / Redis (`notify_db`) |
+| **File Management** | Secure document storage, presigned S3 URLs, virus scanning, and project attachments. | Go 1.22 | MinIO (S3) + PostgreSQL (`files_db`) |
+| **Analytics & AI** | Telemetry ingestion, operational bottleneck aggregation, and permission-aware local RAG queries. | Python 3.12 / FastAPI | ClickHouse (OLAP) |
 
 ---
 
-## 🚫 Reglas de Frontera Inviolables
+## 🚫 Inviolable Domain Boundary Rules
 
-1. **Sin queries inter-base de datos:** `workspace_db` jamás tendrá claves foráneas directas (`FOREIGN KEY`) apuntando a tablas de `tenant_db`. La relación se realiza lógicamente mediante `tenant_id` y `organization_id` transferidos en el token y eventos.
-2. **Los datos maestros residen en su dueño:** La información del perfil empresarial vive exclusivamente en `Tenant Management`. Otros servicios únicamente cachean u operan con el `tenant_id` y el identificador de usuario.
-3. **Desacoplamiento temporal:** Si el servicio de Billing o Notifications está temporalmente fuera de servicio, la creación de una organización o tarea **no debe fallar**; se emite el evento al Broker para que se procese tan pronto el servicio se recupere.
+1. **Zero Cross-Database Foreign Keys:**  
+   `workspace_db` must never define direct SQL foreign keys referencing tables in `tenant_db` or `workflow_db`. Logical relationships are coordinated strictly via `tenant_id`, entity IDs, and asynchronous CloudEvents.
+2. **Master Data Ownership:**  
+   Corporate profile and organization states belong exclusively to `Tenant Management`. Other services cache or consume tenant metadata solely via validated JWT claims or events.
+3. **Temporal Decoupling:**  
+   If the Notifications or Billing services are temporarily unavailable, task management and project operations **must not fail**. Events are published reliably to RabbitMQ via the Transactional Outbox pattern for guaranteed eventual delivery.

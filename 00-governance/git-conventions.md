@@ -1,184 +1,86 @@
-# 00 — Convenciones de Git y Estrategia de Ramas
+# 00 — Git Conventions, Branching Strategy & Environment Flow
 
-> **Estado:** 🟢 Estable  
-> **Última actualización:** 2026-11-15  
-> **Líder Técnico & Arquitecto:** Daniel (`daniel2004-lsd`)  
-> **Proyecto:** WorkSphere — Enterprise Operations Intelligence Platform  
-> **Propósito:** Definir el modelo de branching, ciclo de Pull Requests, Conventional Commits y reglas de aprobación para el repositorio de documentación (`worksphere-docs`) y los repositorios de código/infraestructura.
+> **Status:** 🟢 Stable  
+> **Last Updated:** 2026-11-15  
+> **Technical Lead & Architect:** Daniel (`daniel2004-lsd`)  
+> **Project:** WorkSphere — Enterprise Operations Intelligence Platform  
+> **Scope:** Branching lifecycle, Pull Request approvals, and commit conventions across all ecosystem repositories
 
 ---
 
-## 1. Alcance: Dos Modelos de Ramas según el Tipo de Repositorio
+## 1. Dual-Model Branching Strategy by Repository Type
 
-| Tipo de Repositorio | Repositorios del Ecosistema | Modelo de Ramas | Ambientes |
+| Repository Type | Target Repositories | Branching Model | Environments |
 |---|---|---|---|
-| **Documental (`-docs`)** | `worksphere-docs` (Fuente Única de Verdad) | **Solo `main`**. Ramas efímeras para cambios. | No maneja ambientes. |
-| **Código / Monorepo (`worksphere`)** | `worksphere` (Backends, Frontend, Infra, DB) | **Flujo Promocional de Ambientes**: `develop` → `qa` → `staging` → `main`. | 4 ambientes formales. |
+| **Documentation (`-docs`)** | `worksphere-docs` (Single Source of Truth) | **`main` Only**. Ephemeral branches for PRs. | No environments. |
+| **Service Repositories (`*-service`)** | `worksphere-tenant-service`, `worksphere-workspace-service`, etc. | **Promotional Environment Flow**: `develop` → `qa` → `staging` → `main`. | 4 formal environments. |
+| **Database Repositories (`*-db`)** | `worksphere-tenant-db`, `worksphere-workspace-db`, etc. | **Promotional Environment Flow**: `develop` → `qa` → `staging` → `main`. | 4 formal environments (Liquibase updates). |
 
 ---
 
-## 2. Modelo A: Repositorio Documental (`worksphere-docs`)
+## 2. Model A: Documentation Repository (`worksphere-docs`)
 
-El repositorio de documentación es la **Fuente Única de Verdad (SSOT)**. Vive siempre en `main` y no se promueve entre ambientes.
+The documentation repository is the **Single Source of Truth (SSOT)**. It lives permanently on `main` and is never promoted across environments.
 
-### Flujo de Cambio Documental:
-1. Crear una rama efímera desde `main`:
-   - `feat/doc-<descripcion>`: Para documentos nuevos.
-   - `fix/doc-<descripcion>`: Para corrección de contenido erróneo.
-   - `chore/doc-<descripcion>`: Para reorganización, imágenes o renombrados.
-   - `docs/doc-<descripcion>`: Para actualización de documentos existentes.
-2. Realizar commits atómicos y claros en inglés siguiendo Conventional Commits.
-3. Subir la rama (`git push origin <rama-efimera>`).
-4. Abrir Pull Request hacia `main`.
-5. Revisar, resolver comentarios y mergear mediante **Squash and Merge**.
-6. Eliminar la rama efímera una vez fusionada.
+### Ephemeral Branch Workflow:
+1. Create an ephemeral branch off `main`:
+   - `feat/doc-<description>`: For new documentation files.
+   - `fix/doc-<description>`: For correcting inaccuracies or broken links.
+   - `chore/doc-<description>`: For reorganization, diagrams, or metadata updates.
+   - `docs/doc-<description>`: For expanding existing specifications.
+2. Commit small, atomic changes in English following Conventional Commits.
+3. Push the ephemeral branch and open a Pull Request towards `main`.
+4. Review, resolve all comment threads, and merge via **Squash and Merge**.
+5. Delete the ephemeral branch immediately after merging.
 
 > [!NOTE]
-> En `worksphere-docs` **no existen ramas `develop`, `qa` ni `staging`**. Nunca se hace commit directo a `main` sin PR.
+> `worksphere-docs` **never uses `develop`, `qa`, or `staging` branches**. Direct pushes to `main` without a reviewed PR are strictly blocked.
 
 ---
 
-## 3. Modelo B: Repositorios de Código (`worksphere`)
+## 3. Model B: Service and Database Repositories (`*-service`, `*-db`)
 
-En el repositorio de código y sus servicios, las ramas principales representan ambientes y están **estrictamente protegidas**:
+For code and database repositories, core branches correspond to environments and are **strictly protected**:
 
 ```mermaid
 flowchart LR
-    DevBranch["hu-<numero>-dev<br/>(Rama de tarea)"] -->|PR| Develop["develop<br/>(Integración continua)"]
-    Develop -->|PR / Cherry-pick| QA["qa<br/>(Validación técnica/QA)"]
-    QA -->|PR / Cherry-pick| Staging["staging<br/>(Preproducción)"]
-    Staging -->|Release PR| Main["main<br/>(Producción estable)"]
+    DevBranch["hu-<number>-dev<br/>(Task Branch)"] -->|PR| Develop["develop<br/>(Continuous Integration)"]
+    Develop -->|PR / Cherry-pick| QA["qa<br/>(Integration & RLS QA)"]
+    QA -->|PR / Cherry-pick| Staging["staging<br/>(Pre-production)"]
+    Staging -->|Release PR| Main["main<br/>(Production Stable)"]
 ```
 
-| Rama Base | Propósito | Regla de Recepción |
+| Base Branch | Purpose | Acceptance Rule |
 |---|---|---|
-| **`develop`** | Integración del trabajo activo de desarrollo. | Recibe Pull Requests desde ramas hijas `hu-<numero>-dev` o `feat/*`. |
-| **`qa`** | Pruebas de integración, verificación de RLS y QA. | Recibe PRs o cherry-picks aprobados desde `develop`. |
-| **`staging`** | Preproducción y validación final previa al release. | Recibe PRs o cherry-picks aprobados desde `qa`. |
-| **`main`** | Producción y código estable en operación. | Recibe únicamente PRs desde ramas de release (`release/iteration-NN`). |
+| **`develop`** | Integration branch for active feature development. | Accepts PRs from child feature branches `hu-<number>-dev`. |
+| **`qa`** | QA validation, performance benchmarks, and RLS leakage tests. | Accepts approved PRs or cherry-picks from `develop`. |
+| **`staging`** | Pre-production environment mirroring live configurations. | Accepts approved PRs or cherry-picks from `qa`. |
+| **`main`** | Production-ready, auditable, and tagged release artifacts. | Accepts only release PRs (`release/iteration-NN`) from `staging`. |
 
 ---
 
-## 4. Nomenclatura de Ramas por Historia de Usuario (Capa de Ejecución)
+## 4. Conventional Commits Standard
 
-Para garantizar trazabilidad absoluta con el tracker de GitHub:
-
-| Caso de Uso | Rama Base | Formato Canónico | Ejemplo |
-|---|---|---|---|
-| **Desarrollo de HU** | `develop` | `hu-<numero>-dev` | `hu-01-dev` |
-| **Ajuste o Validación QA** | `qa` | `hu-<numero>-qa` | `hu-01-qa` |
-| **Validación en Staging** | `staging` | `hu-<numero>-staging` | `hu-01-staging` |
-| **Release de Iteración** | `main` | `release/<iteracion>` | `release/iteration-01` |
-
----
-
-## 5. Procedimiento de Promoción entre Ambientes
-
-### 5.1. Flujo hacia `develop`
-```bash
-git checkout develop
-git pull origin develop
-git checkout -b hu-01-dev
-# ... realizar cambios y pruebas ...
-git add <archivos>
-git commit -m "feat(tenant): implement organization outbox pattern"
-git push origin hu-01-dev
-# Abrir PR hacia develop
-```
-
-### 5.2. Flujo hacia `qa`
-```bash
-git checkout qa
-git pull origin qa
-git checkout -b hu-01-qa
-git merge origin/hu-01-dev  # o git cherry-pick <commit-sha>
-git push origin hu-01-qa
-# Abrir PR hacia qa
-```
-
-### 5.3. Flujo hacia `staging`
-```bash
-git checkout staging
-git pull origin staging
-git checkout -b hu-01-staging
-git merge origin/hu-01-qa
-git push origin hu-01-staging
-# Abrir PR hacia staging
-```
-
-### 5.4. Release hacia `main` (Producción)
-```bash
-git checkout main
-git pull origin main
-git checkout -b release/iteration-01
-git cherry-pick <commit-sha-1>
-git cherry-pick <commit-sha-2>
-git push origin release/iteration-01
-# Abrir PR de release hacia main
-```
-
----
-
-## 6. Convención de Mensajes de Commit (Conventional Commits)
-
-### 6.1. Formato para Repositorio Documental (`worksphere-docs`)
+Format mandate:
 ```
 <type>(NN-section): short description in English
 ```
 
-**Tipos permitidos en docs:**
-- `docs`: Crear o actualizar contenido documental.
-- `fix`: Corregir errores conceptuales, contratos o erratas.
-- `chore`: Mover, renombrar, reordenar o actualizar metadatos/diagramas.
-- `refactor`: Reestructurar secciones sin alterar el significado de fondo.
+### Allowed Types in Documentation:
+- `docs`: Adding or updating documentation content.
+- `fix`: Correcting erroneous contracts, missing parameters, or typos.
+- `chore`: Reorganizing, renaming files, or updating diagram assets.
+- `refactor`: Restructuring sections without altering substantive meaning.
 
 > [!CAUTION]
-> En `worksphere-docs` **no se permite** el uso de `feat`, `test`, `build` ni `ci`.
-
-**Ejemplos válidos:**
-- `docs(01-context): add problem framing and context blindness analysis`
-- `docs(03-product): define MVP essential triad product vision`
-- `docs(06-data): add official Liquibase governance standards`
-- `chore(00-governance): update git conventions and branch models`
-
-### 6.2. Reglas de Calidad para Commits
-1. **Descripción en inglés:** El título y descripción del commit va siempre en idioma inglés.
-2. **Contenido en español:** El cuerpo de los documentos y especificaciones de negocio se redacta en español neutro.
-3. **Atomicidad:** Commits pequeños y trazables a un único artefacto o microservicio.
-4. **No mezclar contextos:** Prohibido agrupar cambios funcionales de diferentes dominios sin relación directa.
+> The types `feat`, `test`, `build`, and `ci` are **not permitted** in `worksphere-docs`. They are reserved exclusively for code and database repositories.
 
 ---
 
-## 7. Políticas de Revisión y Aprobación de Pull Requests
+## 5. Pull Request Review & Branch Protection Rules
 
-### Reglas de GitHub Branch Protection:
-1. **Mínimo de Aprobaciones:** Todo PR requiere al menos 2 aprobaciones de revisores técnicos para fusionarse.
-2. **Resolución de Hilos:** Todos los comentarios de revisión deben estar explícitamente resueltos.
-3. **Descarte por Nuevos Cambios:** Si se hace un push nuevo al PR, las aprobaciones previas se invalidan automáticamente.
-4. **Prohibición de Force-Push y Eliminación:** Protegidas contra force-push en ramas padre (`main`, `develop`, `qa`, `staging`).
-5. **Regla de Oro:** Todo cambio en código **debe existir previamente en docs** (decisión ADR o especificación) y tener su HU trazada en el backlog. Si no existe, primero se aprueba la documentación.
-
----
-
-## 8. Procedimiento de Hotfix en `main`
-
-Si se detecta un fallo crítico o ruptura en `main` que no puede esperar el ciclo regular de release:
-
-```bash
-git checkout main
-git pull origin main
-git checkout -b fix/doc-broken-contract
-# ... corregir el fallo ...
-git add <archivos>
-git commit -m "fix(07-api): correct broken path in tenant openapi contract"
-git push origin fix/doc-broken-contract
-# Abrir PR hacia main y mergear.
-```
-
-Una vez fusionado en `main`, el commit se propaga hacia atrás hacia `staging`, `qa` y `develop` mediante `cherry-pick`:
-```bash
-git checkout develop
-git pull origin develop
-git cherry-pick <commit-sha-hotfix>
-git push origin develop
-```
+1. **Mandatory Approvals:** Every Pull Request requires at least **2 approvals** from authorized technical reviewers.
+2. **Conversation Resolution:** All review comment threads must be explicitly resolved before merging.
+3. **Approval Invalidation on Push:** Any subsequent commit pushed to a PR immediately discards prior approvals.
+4. **No Force-Push:** Force-pushing (`--force`) and branch deletions are strictly disabled on all protected branches.
+5. **Documentation Precedence Rule:** Every code change must trace to an existing specification or ADR in `worksphere-docs`. If a specification does not exist, the documentation PR must be merged first.

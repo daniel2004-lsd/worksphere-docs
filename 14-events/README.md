@@ -1,65 +1,53 @@
-# 14 — Catálogo de Eventos y Mensajería Asíncrona (RabbitMQ)
+# 14 — Event Catalog, Asynchronous Messaging & Dead Letter Queue Governance
 
-> **Broker:** RabbitMQ  
-> **Patrones:** Transactional Outbox, Competing Consumers, Dead Letter Exchange (DLX), Idempotency Key  
-> **Estándar:** CloudEvents v1.0 Spec
+> **Broker:** RabbitMQ 3.13  
+> **Exchange Strategy:** Topic Exchanges (`worksphere.events`) + Direct DLX (`worksphere.dlx`)  
+> **Standard:** CloudEvents v1.0 JSON Specification  
+> **Patterns:** Transactional Outbox, Consumer Idempotency, Exponential Backoff Retries
 
 ---
 
-## 📬 Arquitectura de Publicación: Transactional Outbox Pattern
+## 1. Asynchronous Architecture & Reliable Delivery
 
-Para garantizar que un evento **nunca se pierda** si el broker se cae o si falla la red, los microservicios no publican directamente a RabbitMQ durante la transacción web.
+WorkSphere relies on asynchronous messaging to decouple state transitions across microservices without synchronous HTTP blocking.
 
 ```mermaid
-sequenceDiagram
-    autonumber
-    actor Usuario
-    participant Service as Tenant Service (Spring Boot)
-    participant DB as PostgreSQL (tenant_db)
-    participant Relay as Outbox Publisher Worker
-    participant RMQ as RabbitMQ Exchange
-    participant Billing as Billing Service (.NET)
-    participant Notify as Notification Service (Go)
-
-    Usuario->>Service: POST /api/v1/organizations (Crear Org)
-    activate Service
-    Note over Service,DB: Transacción ACID Local
-    Service->>DB: INSERT INTO organizations (...)
-    Service->>DB: INSERT INTO outbox_events (event_name, payload, status='PENDING')
-    DB-->>Service: Commit OK
-    Service-->>Usuario: 201 Created (org_id)
-    deactivate Service
-
-    loop Cada 500ms o CDC Debezium
-        Relay->>DB: SELECT * FROM outbox_events WHERE status = 'PENDING' LIMIT 50
-        Relay->>RMQ: Publish "organization.created"
-        RMQ-->>Relay: ACK
-        Relay->>DB: UPDATE outbox_events SET status = 'PUBLISHED'
-    end
-
-    RMQ->>Billing: Consume "organization.created"
-    Billing->>Billing: Crear suscripción de prueba (Idempotente)
-    RMQ->>Notify: Consume "organization.created"
-    Notify->>Notify: Enviar correo de bienvenida
+flowchart LR
+    Producer["Service Producer<br/>(e.g., workflow-service)"] -->|1. ACID Commit| Outbox[("outbox_events Table")]
+    Relay["Outbox Relay Worker"] -->|2. Poll PENDING| Outbox
+    Relay -->|3. Publish| Exchange["RabbitMQ Topic Exchange<br/>(worksphere.events)"]
+    Exchange -->|4. Route by topic| Queue["Service Queue<br/>(workspace.events.inbox)"]
+    Queue -->|5. Consume| Consumer["Service Consumer<br/>(workspace-service)"]
+    Consumer -->|6. Check event_id| Inbox[("inbox_processed_events")]
+    Consumer -.->|Failure after 3 retries| DLX["Dead Letter Exchange<br/>(worksphere.dlx)"]
+    DLX --> DLQ["Dead Letter Queue<br/>(worksphere.events.dlq)"]
 ```
 
 ---
 
-## 📜 Catálogo Inicial de Eventos
+## 2. Event Routing Topologies
 
-| Evento | Origen (Producer) | Destinos (Consumers) | Carga Útil (Payload Resumen) |
+- **Primary Exchange:** `worksphere.events` (Type: `topic`, Durable: `true`)
+- **Dead Letter Exchange:** `worksphere.dlx` (Type: `direct`, Durable: `true`)
+- **Dead Letter Queue:** `worksphere.events.dlq` (Bound to `worksphere.dlx` with routing key `dead-letter`)
+
+### Routing Key Standard:
+Format: `worksphere.<domain>.<entity>.<action>`
+
+| Routing Key | Producing Service | Consuming Services | Description |
 |---|---|---|---|
-| `organization.created` | Tenant Management | Billing, Notifications, Analytics | `tenant_id`, `org_name`, `admin_email`, `created_at` |
-| `member.invited` | Tenant Management | Notifications | `tenant_id`, `invitation_id`, `target_email`, `role`, `expires_at` |
-| `subscription.activated` | Billing Service | Tenant Management, Notifications | `tenant_id`, `plan_id`, `max_users`, `max_storage_gb`, `status` |
-| `subscription.suspended` | Billing Service | Tenant Management, Notifications | `tenant_id`, `reason`, `suspended_at` |
-| `task.created` | Workspace Service | Workflow, Analytics | `tenant_id`, `project_id`, `task_id`, `assigned_to`, `priority` |
-| `task.status_changed` | Workspace Service | Workflow, Notifications | `tenant_id`, `task_id`, `previous_status`, `new_status`, `changed_by` |
-| `approval.requested` | Workflow Service | Notifications, Workspace | `tenant_id`, `workflow_id`, `approver_id`, `entity_type`, `entity_id` |
+| `worksphere.tenant.organization.created` | `tenant-service` | Billing, Notifications, Analytics | Emitted when an organization completes onboarding. |
+| `worksphere.workspace.task.blocked` | `workspace-service` | Workflow, Notifications | Emitted when a task enters `BLOCKED_BY_APPROVAL`. |
+| `worksphere.workflow.approval.resolved` | `workflow-service` | `workspace-service`, Notifications | Emitted when a decision (`APPROVED`/`REJECTED`) is recorded. |
 
 ---
 
-## 🛡️ Políticas de Resiliencia en RabbitMQ
+## 3. Resiliency, Retries & Dead Letter Policies
 
-1. **Dead Letter Exchange (DLX):** Si un mensaje falla tras 3 reintentos con *exponential backoff*, se enruta a la cola `.dlq` para inspección humana o reprocesamiento sin bloquear el flujo.
-2. **Idempotencia:** Cada consumidor almacena en una tabla `processed_events` el `event_id` (UUID único del evento). Si recibe un mensaje duplicado, lo ignora y emite ACK inmediatamente.
+1. **Consumer Idempotency:**  
+   Every consumer records the CloudEvents `id` in its local `inbox_processed_events` table within the same transaction that applies the state change. If an event is redelivered, the consumer acknowledges immediately without re-executing logic.
+2. **Retry Strategy:**  
+   - Attempt 1: Immediate retry.
+   - Attempt 2: 2-second backoff.
+   - Attempt 3: 10-second backoff.
+   - Failure: Negative Acknowledgement (`basic.reject(requeue=false)`), automatically routing the message to `worksphere.dlx`.
